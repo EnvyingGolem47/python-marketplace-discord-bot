@@ -18,3 +18,4 @@
 /data/logs
 /system/memory/district_role_mappings.json
 /system/memory/counter
+.venv

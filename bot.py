@@ -868,10 +868,21 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
         temp_1 = get_current_discord_timecode()
         temp_2 = get_next_check_deadline()
 
-        shop_info['status'] = "✅ OK"
-        shop_info['next_check'] = f"<t:{temp_2}:f>"  # <t:1776276900:f>
-        shop_info['last_checked_by'] = f"<@{bot.user.id}>"
-        shop_info['last_checked'] = f"<t:{temp_1}:f>"
+        if shop_already_in_database:
+
+
+            last_check = database.query(f"SELECT shop_status, checked_by_id, date_and_time FROM shop_checks WHERE shop_id = {shop_info['sql_id']}")[0]
+
+            shop_info['status'] = f"{last_check[0]}"
+            shop_info['next_check'] = f"<t:{temp_2}:f>"  # <t:1776276900:f>
+            shop_info['last_checked_by'] = f"<@{last_check[1]}>"
+            shop_info['last_checked'] = f"<t:{int(last_check[2].timestamp())}:f>"
+
+        else:
+            shop_info['status'] = "✅ OK"
+            shop_info['next_check'] = f"<t:{temp_2}:f>"  # <t:1776276900:f>
+            shop_info['last_checked_by'] = f"<@{bot.user.id}>"
+            shop_info['last_checked'] = f"<t:{temp_1}:f>"
 
     # TODO: 6- Trigger construct_shop_embeds with stored data
     embed_list = construct_shop_embeds(shop_embeds_template,shop_info)
@@ -924,14 +935,14 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
         # mc_owners
         # discord_owners
 
-        database.query(f"UPDATE shops SET mc_owners = \"{mc_owners_list_str}\" WHERE shop_id = {int(shop_info['sql_id'])};")
-        database.query(f"UPDATE shops SET discord_owners = \"{discord_owners_list_str}\" WHERE shop_id = {int(shop_info['sql_id'])};")
+        database.query(f"UPDATE shops SET mc_owners = \"{mc_owners_list_str}\" WHERE shop_id = {shop_info['sql_id']};")
+        database.query(f"UPDATE shops SET discord_owners = \"{discord_owners_list_str}\" WHERE shop_id = {shop_info['sql_id']};")
 
     # Otherwise insert into table as normal.
     else:
         # Try to insert data into SQL Database
         database.query("INSERT INTO shops (shop_id,shop_name,coords,shop_init,large_shop,service_shop,image,district,shop_status,mc_owners,discord_owners) VALUES (" +
-                       f"{shop_info['sql_id']}, \"{shop_info['shop_name']}\", \"{shop_info['shop_coords']}\", {int(shop_info['initialized'])}, {int(shop_info['large_shop'])}, {int(shop_info['service_shop'])}, \"{shop_info['shop_image_url']}\", \"{shop_info['district_number']}\", \"Open\", \"{mc_owners_list_str}\", \"{discord_owners_list_str}\")")
+                       f"{shop_info['sql_id']}, \"{shop_info['shop_name']}\", \"{shop_info['shop_coords']}\", {shop_info['initialized']}, {shop_info['large_shop']}, {shop_info['service_shop']}, \"{shop_info['shop_image_url']}\", \"{shop_info['district_number']}\", \"Open\", \"{mc_owners_list_str}\", \"{discord_owners_list_str}\")")
 
 
     # TODO: 9- Create channel in district category
@@ -1646,21 +1657,22 @@ DONE !mb change serviceshop "<shop name>" <True/False> : Changes the service sho
 
 DONE RENAMED !mb change district "<shop name>" <district#> : Changes the district number the shop is assigned to. Moves the shop channel to the corresponding district category and mentions that district's role. Usable only by @Staff
 
-!mb update owner1 "<shop name>" "<new name>" "<new owner discord ID>" : Changes the 1st owner's name and Discord ID (DiscordID#0000 format) for the shop entered as "shop name". This command may also be used to update the 2nd and 3rd owner names by substituting owner2 and owner3 for "owner1" in the command. Usable only by @Staff
+DONE !mb update owner1 "<shop name>" "<new name>" "<new owner discord ID>" : Changes the 1st owner's name and Discord ID (DiscordID#0000 format) for the shop entered as "shop name". This command may also be used to update the 2nd and 3rd owner names by substituting owner2 and owner3 for "owner1" in the command. Usable only by @Staff
 
 DONE RENAMED !mb newimage "<shop name>" : Changes the image for the shop named in "shop name". This command may only be used in a district comments channel! Usable only by @Staff
 
 IGNORE !mb closeticket <ticket#> : Closes the ticket with the ticket number entered and sends a transcript to #shop-ticket-logs. Usable only by @Shop Check Admin.
 
-!mb search <search term> : allows you to search for shops based on various attributes such as the shop's name, owner names, and owner Discord IDs
+DONE !mb search <search term> : allows you to search for shops based on various attributes such as the shop's name, owner names, and owner Discord IDs
 
 DONE !mb claim
 
-!mb report : admin command to grab a report on open shops that have not been checked the current week.
+DONE !mb report : admin command to grab a report on open shops that have not been checked the current week.
 """
 
 # !mb create
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Initiates a shop creation ticket.")
+@discord.ext.commands.has_role(variables['shop_staff_id'])
 async def create(ctx):
 
     try:
@@ -1687,10 +1699,11 @@ async def create(ctx):
 
 # !mb pop
 # @bot.slash_command(guild_ids=[variables['guild_id']],description="Repopulates the desired shop.")
+# @discord.ext.commands.has_role(variables['shop_staff_id'])
 async def pop(ctx, channel:discord.Option(discord.TextChannel,description="Shop Channel to close")):
     # TODO: Finish
 
-    # So basically grab data from SQL and edit messages with new shop embeds. Just going to copy and paste my code from import_from_sql
+    # So basically grab data from SQL and edit messages with new? shop embeds. Just going to copy and paste my code from import_from_sql
 
     result = database.query(f"SELECT * FROM shops WHERE shop_channel_id = {channel.id}")
     #   0    1                2     3       4            5               6            7               8            9               10         11          12            13               14        15           16            17            18             19              20
@@ -1717,12 +1730,14 @@ async def pop(ctx, channel:discord.Option(discord.TextChannel,description="Shop 
 
 # !mb help
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Displays a list of commands.")
+@discord.ext.commands.has_role(variables['shop_staff_id'])
 async def help(ctx):
     # TODO: Finish
     pass
 
 # !mb claim
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Claims a shop for you.")
+@discord.ext.commands.has_role(variables['shop_staff_id'])
 async def claim(ctx,channel: discord.Option(discord.TextChannel, description="")):
     debug(f"{ctx.author} trying to claim {channel}")
 
@@ -1788,6 +1803,7 @@ async def close_shop(ctx, channel:discord.Option(discord.TextChannel,description
 
 # New command to update a shop's image
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Updates an image for a shop. Note: This can take a minute.")
+@discord.ext.commands.has_role(variables['shop_staff_id'])
 async def update_image(ctx, channel:discord.Option(discord.TextChannel,description="Channel to update image") ,image: discord.Option(discord.Attachment,description="Image update to")):
     debug("Updating image")
 
@@ -1829,6 +1845,7 @@ async def update_image(ctx, channel:discord.Option(discord.TextChannel,descripti
 # New command to update information about a shop
 # !mb change shopname, coords, largeshop, serviceshop
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Updates information about a shop.")
+@discord.ext.commands.has_role(variables['shop_staff_id'])
 async def update_shop(ctx, channel: discord.Option(discord.TextChannel,description="Shop's channel"),
                       shop_name: discord.Option(str,description="Name to change to",required=False,default=None),
                       coords: discord.Option(str,description="Coords to change to",required=False,default=None),
@@ -1975,6 +1992,7 @@ async def move_shop(ctx, channel: discord.Option(discord.TextChannel,description
 
 # !mb update owner
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Updates the owners of a shop.")
+@discord.ext.commands.has_role(variables['shop_staff_id'])
 async def update_owner(ctx, shop: discord.Option(discord.TextChannel,description="Shop's channel",required=True),
                        owner_number: discord.Option(int,description="Owner Number. (1, 2, 3, 4, 5.. 20",required=True),
                        mc_name: discord.Option(str,description="Minecraft Username. Leave blank to remove owner.",default="",required=False),
@@ -2173,6 +2191,26 @@ async def report(ctx):
 
     await ctx.respond(embeds=embed_list)
 
+# !mb search
+@bot.slash_command(guild_ids=[variables['guild_id']],description="Searches through the database to look for a keyword.")
+@discord.ext.commands.has_role(variables['shop_staff_id'])
+async def search(ctx, search_term: discord.Option(str,description="Shop Name, Owner, or a Keyword. Case sensitive.",required=True)):
+    # TODO: Finish
+    results = database.query(
+        f"SELECT shop_channel_id FROM shops WHERE (shop_name LIKE '%{search_term}%' OR mc_owners LIKE '%{search_term}%' OR discord_owners LIKE '%{search_term}%') AND shop_status = 'Open';")
+
+    if len(results) == 0:
+        await ctx.respond("Nothing found.", ephemeral=True)
+        return
+
+    message_to_send = "**Results:**\n"
+
+    for r in results:
+        message_to_send += f"<#{r[0]}>\n"
+
+    await ctx.respond(message_to_send)
+
+
 # ========================================================================================[DEV COMMANDS]============================================================================================
 
 # New command to load and create missing shops from SQL database
@@ -2203,11 +2241,11 @@ async def import_from_sql(ctx):
         temp_owners.append(s[4])
         temp_owners_discord.append(s[5])
 
-        if s[6].lower() != "none":
+        if s[6] is not None:
             temp_owners.append(s[6])
             temp_owners_discord.append(s[7])
 
-        if s[8].lower() != "none":
+        if s[8] is not None:
             temp_owners.append(s[8])
             temp_owners_discord.append(s[9])
 
