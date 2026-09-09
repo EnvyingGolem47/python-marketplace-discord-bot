@@ -871,6 +871,7 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
 
         if shop_already_in_database:
 
+            # TODO: Possibly don't include if we're starting over with a blank slate.
 
             last_check = database.query(f"SELECT shop_status, checked_by_id, date_and_time FROM shop_checks WHERE shop_id = {shop_info['sql_id']}")[0]
 
@@ -1478,6 +1479,7 @@ async def on_raw_reaction_add(reaction_data):
 
             database.query(f"INSERT INTO shop_checks(shop_id,checked_by_id,shop_status,date_and_time) VALUES({temp_shop_id},{checked_by_id},'{status}','{str(datetime.datetime.now()).split('.')[0]}');)")
 
+            # TODO: Maybe look into database sided programming so we can run the calculations in the shops table and not have to this everytime.
             warnings_count = int(database.query(f"SELECT COUNT(date_and_time) FROM shop_checks WHERE shop_id = {temp_shop_id} AND shop_status = '⚠️ Warning' AND date_and_time >= (SELECT MAX(date_and_time) FROM shop_checks WHERE shop_id = {temp_shop_id} AND shop_status = '⚠️ Warning') - INTERVAL 3 MONTH;")[0][0])
 
             if warnings_count > 0:
@@ -2130,7 +2132,7 @@ async def report(ctx):
     #result_two = database.query("SELECT shop_id, MAX(date_and_time) FROM shop_checks GROUP BY shop_id ORDER BY date_and_time DESC;")
 
 
-    result = database.query(f"SELECT sc.shop_id, sh.district, MAX(sc.date_and_time), sh.shop_channel_id FROM shop_checks sc INNER JOIN shops sh ON sc.shop_id=sh.shop_id GROUP BY sc.shop_id ORDER BY sh.district ASC;")
+    result = database.query(f"SELECT sc.shop_id, sh.district, MAX(sc.date_and_time), sh.shop_channel_id FROM shop_checks sc INNER JOIN shops sh ON sc.shop_id=sh.shop_id WHERE sh.shop_status = \"Open\" GROUP BY sc.shop_id ORDER BY sh.district ASC;")
 
 
     # 0        1         2         3
@@ -2191,7 +2193,8 @@ async def report(ctx):
 
             current_embed.add_field(name=f"<#{shop[3]}>",value=late_check_string,inline=False)
 
-    await ctx.respond(embeds=embed_list)
+    if len(embed_list) > 0:
+        await ctx.respond(embeds=embed_list)
 
 # !mb search
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Searches through the database to look for a keyword.")
@@ -2341,7 +2344,7 @@ async def reformat(ctx):
     :param ctx:
     :return:
     """
-    # TODO: Finish
+    # TODO: Remove, we're not reformatting current discord server
     # TODO: Transform all entries in timestamps to datetime values in the date_and_time column
 
     await ctx.respond("Reformatting SQL Database... This may take a while.\nDO NOT USE OTHER BOT FUNCTIONS UNTIL THIS IS DONE!")
