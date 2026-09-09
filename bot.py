@@ -29,6 +29,7 @@ sql_template_file = f"system/sql_template.sql"
 emoji_to_staff_member_file = "data/baguette_config.json"
 
 logger = Logger(logs_folder)
+logger.log("==== BOT STARTING UP ====")
 
 forbidden_name = re.compile(r"🗒-district-[0-9]+-comments", re.IGNORECASE)
 district_regex = re.compile(r"District [0-9]+")
@@ -1070,6 +1071,7 @@ def cache_sql_data():
 @bot.event
 async def on_ready():
     global primary_guild
+    logger.clean_logs(14)
     primary_guild = await bot.fetch_guild(variables['guild_id'])
     logger.log("Bot loaded and connected.", tag="[INFO] ")
     logger.log(f"Logged in as {bot.user}", tag="[INFO] ")

@@ -7,12 +7,15 @@ I'll fill this out better later (trust)
 
 ## Installation:
 
-- download as a zip file
-- set up mysql server and database
-- install python
-- install dependencies
-- extract zip file to desired folder
-- run it and follow first startup instructions
+- Download as a zip file
+- Set up mysql server and database
+- Install python 3.12
+- Install dependencies
+  - `pip install "superutilities==0.2.5"`
+  - `pip install "py-cord==2.7.1"`
+  - `pip install "mysql-connector-python==26.7.0"`
+- Extract zip file to desired folder
+- Run bot.py and follow the first startup instructions
 
 
 
