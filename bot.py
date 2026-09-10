@@ -9,10 +9,12 @@ import datetime
 import time
 import re
 from json import JSONDecodeError
-
-import discord
+import io
 import os
 import copy
+
+import chat_exporter
+import discord
 from discord.ext import tasks, commands
 from superutilities import SInput, SanitizeString, getJsonFromFile, saveJsonToFile, Logger
 import mysql.connector
@@ -473,6 +475,7 @@ def get_variables() -> dict:
         guild_id = SInput("Please enter your Discord server's ID: ", IsInt=True)
         ticket_category_id = SInput("Please enter the category ID where you want Shop Tickets to be created in: ", IsInt=True)
         images_channel_id = SInput("Please enter the channel ID where you want Shop Images to be stored: ", IsInt=True)
+        transcript_channel_id = SInput("Please enter the channel ID where you want Shop Transcripts to be stored: ", IsInt=True)
         shop_admin_id = SInput("Please enter the Shop Admin Role ID: ", IsInt=True)
         shop_staff_id = SInput("Please enter the Staff Role ID: ", IsInt=True)
 
@@ -488,6 +491,7 @@ def get_variables() -> dict:
                 "guild_id": guild_id,
                 "ticket_category_id":ticket_category_id,
                 "images_channel_id": images_channel_id,
+                "transcript_channel_id": transcript_channel_id,
                 "shop_admin_id": shop_admin_id,
                 "shop_staff_id": shop_staff_id,
                 "sql_hostname": sql_hostname,
@@ -1005,7 +1009,12 @@ shop_id_cache = {}
 
 # Grab the channel the reaction was in (Cache the API response if it is not a new channel)
 async def get_from_channel_cache(channel_id:int):
+    """
+    Gets a channel from cache OR will fetch and cache an unseen one.
 
+    :param channel_id:
+    :return:
+    """
     global channel_cache
     str_channel_id = str(channel_id)
 
@@ -1023,6 +1032,16 @@ async def get_from_message_cache(msg_id:int,channel):
         message_cache[msg_id_str] = await channel.fetch_message(msg_id)
 
     return message_cache[msg_id_str]
+
+async def delete_channel(channel,reason="Shop closed."):
+
+    global channel_cache
+    str_channel_id = str(channel.id)
+
+    if str_channel_id in channel_cache:
+        channel_cache.pop(str_channel_id)
+
+    await channel.delete(reason=reason)
 
 async def get_shop_channel_history(shop_channel):
     shop_message_history = []
@@ -1248,8 +1267,8 @@ async def on_message(msg):
             # If successfully made shop channel, delete the ticket channel
             if success:
 
-                # TODO: Add in ticket transcript saving
-                await msg.channel.delete()
+                #await msg.channel.delete()
+                await delete_channel(msg.channel,"")
 
         # If it is not an accepted response, delete the message.
         elif not accepted_response:
@@ -1618,6 +1637,7 @@ async def on_raw_reaction_add(reaction_data):
 
             await log_shop_check_activity(shop_message_history[0], channel.id, reaction_user.id, "❌ Reclaim")
 
+            # TODO: Add in message template that can be sent to the shop owner
 
 
         # IF ENVELOPE EMOJI
@@ -1761,8 +1781,10 @@ async def claim(ctx,channel: discord.Option(discord.TextChannel, description="")
 # !mb closeshop
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Closes a shop that has been marked for reclaim. Shop Admins only.")
 @discord.ext.commands.has_role(variables['shop_admin_id'])
-async def close_shop(ctx, channel:discord.Option(discord.TextChannel,description="Shop Channel to close")):
+async def close_shop(ctx):
     # TODO: Finish
+
+    channel = ctx.channel
 
     if not await is_shop_channel(channel):
         await ctx.respond("Invalid Channel", ephemeral=True)
@@ -1796,11 +1818,25 @@ async def close_shop(ctx, channel:discord.Option(discord.TextChannel,description
         debug("Closing shop")
         await ctx.respond(f"Closing <#{channel.id}>", ephemeral=True)
 
-        # TODO: Add transcript grabber here
+        # TODO: Find a way to include what was in the threads in transcript
+        # TODO: Might need to experiment with using the raw_export function and doing the message gathering myself.
+        transcript = await chat_exporter.export(channel,bot=bot)
+
+        transcript_file = discord.File(
+            io.BytesIO(transcript.encode()),
+            filename=f"transcript-{ctx.channel.name}.html",
+        )
+
+        transcript_channel = await get_from_channel_cache(variables["transcripts_channel_id"])
+        await transcript_channel.send(file=transcript_file)
+
+        #await bot.get_channel(variables["transcripts_channel_id"]).send(file=transcript_file)
 
         database.query(f"UPDATE shops SET shop_status = \"Closed\" WHERE shop_channel_id = \"{channel.id}\";")
 
-        await channel.delete(reason="Shop closed.")
+        #await channel.delete(reason="Shop closed.")
+
+        await delete_channel(channel)
 
     else:
         await ctx.respond(f"Shop not marked for Reclaim.", ephemeral=True)
