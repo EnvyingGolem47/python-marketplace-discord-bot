@@ -19,3 +19,4 @@
 /system/memory/district_role_mappings.json
 /system/memory/counter
 .venv
+/upload_image_tests.py

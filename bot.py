@@ -12,12 +12,14 @@ from json import JSONDecodeError
 import io
 import os
 import copy
+import hashlib
 
 import chat_exporter
 import discord
 from discord.ext import tasks, commands
 from superutilities import SInput, SanitizeString, getJsonFromFile, saveJsonToFile, Logger
 import mysql.connector
+import paramiko
 
 image_folder = "data/images/"
 memory_folder = "system/memory/"
@@ -38,7 +40,7 @@ district_regex = re.compile(r"District [0-9]+")
 ticket_regex = re.compile(r"ticket-[0-9]+-\S*", re.IGNORECASE)
 
 # Set to true if you want your console to be unreadable (Or if you are genuinely working on the bot)
-debug_mode = True
+debug_mode = False
 
 # General Todo list
 # TODO: Optimize code once finished with all features of it (surely this will happen)
@@ -467,8 +469,11 @@ def get_variables() -> dict:
     try:
         variables_data = getJsonFromFile(variables_file)
 
+        if len(variables_data.keys()) < 18:
+            raise FileNotFoundError
+
     except FileNotFoundError:
-        logger.log("COULD NOT FIND VARIABLES FILE!", tag="[CRITICAL] ")
+        logger.log("COULD NOT FIND/LOAD VARIABLES FILE!", tag="[CRITICAL] ")
         print("Please follow these prompts to create a new one.")
 
         token = SInput("Please enter your bot token: ")
@@ -485,6 +490,13 @@ def get_variables() -> dict:
         sql_password = SInput("Please enter your SQL Server's Password: ")
         sql_port = SInput("Please enter your SQL Server's Port Number: ",IsInt=True)
 
+        sftp_hostname = SInput("Please enter your SQL Server's Hostname: ")
+        sftp_username = SInput("Please enter your SQL Server's Username: ")
+        sftp_password = SInput("Please enter your SQL Server's Password: ")
+        sftp_port = SInput("Please enter your SQL Server's Port Number: ",IsInt=True)
+        sftp_image_directory = SInput("Please enter the directory where your images are being stored in the SFTP server: ")
+        image_url_prefix = SInput("Please enter the URL Prefix for where images are being hosted.\n(Example: 'test.com/image.png' you would put 'test.com/')\n: ")
+
         variables_data = \
             {
                 "token": token,
@@ -498,7 +510,13 @@ def get_variables() -> dict:
                 "sql_database_name": sql_database_name,
                 "sql_username": sql_username,
                 "sql_password": sql_password,
-                "sql_port": sql_port
+                "sql_port": sql_port,
+                "sftp_hostname": sftp_hostname,
+                "sftp_username": sftp_username,
+                "sftp_password": sftp_password,
+                "sftp_port": sftp_port,
+                "sftp_image_directory": sftp_image_directory,
+                "image_url_prefix": image_url_prefix
             }
 
         saveJsonToFile(variables_file,variables_data)
@@ -720,25 +738,46 @@ primary_guild = discord.Guild
 async def store_image(guild,attachment:discord.Attachment):
     """
     Saves the shop's image and returns the URL which it is stored at.
+
     :param guild:
     :param attachment:
     :return:
     """
 
-    # TODO: Discord seems to remove
-    image_channel = await guild.fetch_channel(variables['images_channel_id'])
+    # TODO: Discord trick didn't work out too well, so SFTP with a Website server it is! :)
+    # TODO: Maybe check if image already exists, but since its the hash as the name i dont see any major problems with just not checking (famous last words)
 
     await attachment.save(attachment.filename)
+    debug("Saving to sftp server")
 
-    msg_sent = await image_channel.send(file=discord.File(attachment.filename))
-    msg_sent = await image_channel.fetch_message(msg_sent.id)
+    raw_file = open(attachment.filename,'rb').read()
+    hash_object = hashlib.sha256(raw_file)
 
-    debug(f'msg atchmnts: {msg_sent.attachments}')
-    debug(f'msg content: {msg_sent.content}')
+    file_extension = attachment.filename.split(".")[-1]
 
+    sha256_hash = hash_object.hexdigest()
+
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # Apparently this isn't secure according to the docs, sooooo dont know what to do about that (not sure if it matters)
+
+    ssh.connect(hostname=variables["sftp_hostname"], username=variables["sftp_username"], password=variables["sftp_password"],
+                port=variables["sftp_port"])
+
+    sftp = ssh.open_sftp()
+
+    remote_file_path = f'{variables["sftp_image_directory"]}{sha256_hash}.{file_extension}'
+    sftp.put(attachment.filename, remote_file_path)
+
+    stored_url = f"{variables['image_url_prefix']}{sha256_hash}.{file_extension}"
+
+    sftp.close()
+    ssh.close()
+
+    debug("Removing image")
     os.remove(attachment.filename)
 
-    return msg_sent.attachments[0].url
+    logger.log(f"Stored new image: '{stored_url}' in SFTP server.","[INFO] ")
+    return stored_url
 
 async def notify_district(district_number:int,msg:str,channel_list) -> bool:
     # TODO: FINISH
@@ -876,6 +915,7 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
         if shop_already_in_database:
 
             # TODO: Possibly don't include if we're starting over with a blank slate.
+            # TODO: Actually if we do start over with a blank slate, lets make all new records that have the okay status for the shops
 
             last_check = database.query(f"SELECT shop_status, checked_by_id, date_and_time FROM shop_checks WHERE shop_id = {shop_info['sql_id']}")[0]
 
@@ -917,7 +957,6 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
             category_id = cat.id
             break
 
-
     # TODO: SANITIZE SHOP NAME HERE
     shop_info['shop_name'] = SanitizeString(shop_info['shop_name'],bannedCharacters=['$', '&', '{', '}', '\\', '/', '[', ']','(',')','|','<','>'])
 
@@ -950,6 +989,8 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
         database.query("INSERT INTO shops (shop_id,shop_name,coords,shop_init,large_shop,service_shop,image,district,shop_status,mc_owners,discord_owners) VALUES (" +
                        f"{shop_info['sql_id']}, \"{shop_info['shop_name']}\", \"{shop_info['shop_coords']}\", {shop_info['initialized']}, {shop_info['large_shop']}, {shop_info['service_shop']}, \"{shop_info['shop_image_url']}\", \"{shop_info['district_number']}\", \"Open\", \"{mc_owners_list_str}\", \"{discord_owners_list_str}\")")
 
+        # Make shop check record to avoid listing in /report
+        database.query(f"INSERT INTO shop_checks(shop_id,checked_by_id,shop_status,date_and_time) VALUES({shop_info['sql_id']},{bot.user.id},'✅ OK','{str(datetime.datetime.now()).split('.')[0]}');)")
 
     # TODO: 9- Create channel in district category
     if new_category is None:
@@ -1269,6 +1310,10 @@ async def on_message(msg):
 
                 #await msg.channel.delete()
                 await delete_channel(msg.channel,"")
+
+            else:
+
+                logger.log(f"Failed to create shop channel: {msg.channel}","[ERROR] ")
 
         # If it is not an accepted response, delete the message.
         elif not accepted_response:
@@ -1846,6 +1891,8 @@ async def close_shop(ctx):
 @discord.ext.commands.has_role(variables['shop_staff_id'])
 async def update_image(ctx, channel:discord.Option(discord.TextChannel,description="Channel to update image") ,image: discord.Option(discord.Attachment,description="Image update to")):
     debug("Updating image")
+
+    # TODO: Check to make sure this is an image filetype
 
     if not await is_shop_channel(channel):
         await ctx.respond("Invalid Channel", ephemeral=True)
@@ -2519,6 +2566,20 @@ async def test(ctx):
     await ctx.channel.send(embeds=new_list_two)
 
 # ========================================================================================[DEV COMMANDS]============================================================================================
+
+# New command to create a shop, but without going through the process in a channel.
+#@bot.slash_command(guild_ids=[variables['guild_id']],description="Create a shop but by just using the command.")
+async def cmd_create(ctx,
+                     shop_name: discord.Option(str,description="Shop Name"),
+                     shop_coords: discord.Option(str,description="Shop Coords Format: X X X"),
+                     owners_mc_list: discord.Option(str,description="List of Owners' In Game Usernames. Seperate with |"),
+                     owners_discord_list: discord.Option(str,description="List of Owners' Discord Usernames/IDs. Seperate with |"),
+                     large_shop: discord.Option(bool,description="Is it a large shop?"),
+                     service_shop: discord.Option(bool,description="Is it a service shop?"),
+                     shop_image: discord.Option(discord.Attachment,description="Image update to"),
+                     district_number: discord.Option(int,description="District Number")):
+    # TODO: Finish
+    pass
 
 # New command to map roles to districts
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Map a role to a district number.")
