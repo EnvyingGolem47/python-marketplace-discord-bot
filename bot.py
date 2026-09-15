@@ -3,7 +3,7 @@
 #
 # Python Marketplace Discord Bot - Built for Project Nebula
 #
-# Updated: 9/14/2026 - EnvyingGolem47
+# Updated: 9/15/2026 - EnvyingGolem47
 
 import datetime
 import time
@@ -410,7 +410,7 @@ def debug(txt:str):
     if debug_mode:
         print(txt)
 
-def get_next_check_deadline():
+def get_next_check_deadline(checked_date=None):
     """
     Returns the next deadline to check shops.
 
@@ -421,7 +421,11 @@ def get_next_check_deadline():
     # Monday  Tuesday  Wednesday  Thursday  Friday  Saturday  Sunday
     # 0       1        2          3         4       5         6
 
-    current_datetime = datetime.datetime.now()
+    if checked_date is None:
+        current_datetime = datetime.datetime.now()
+    else:
+        current_datetime = checked_date
+
     new_datetime = datetime.datetime(year=current_datetime.year,month=current_datetime.month,day=current_datetime.day,hour=17)
 
     if 6 > current_datetime.weekday() >= 4:
@@ -1134,8 +1138,7 @@ async def on_ready():
     global primary_guild
     logger.clean_logs(14)
     primary_guild = await bot.fetch_guild(variables['guild_id'])
-    logger.log("Bot loaded and connected.", tag="[INFO] ")
-    logger.log(f"Logged in as {bot.user}", tag="[INFO] ")
+    logger.log(f"Loaded and Connected as {bot.user}", tag="[INFO] ")
 
 # Event triggered when message sent. Handles Shop Creation.
 @bot.event
@@ -1767,35 +1770,93 @@ async def create(ctx):
         await ctx.respond("Error creating ticket...\nPlease contact Admins.", ephemeral=True)
 
 # !mb pop
-# @bot.slash_command(guild_ids=[variables['guild_id']],description="Repopulates the desired shop.")
-# @discord.ext.commands.has_role(variables['shop_staff_id'])
-async def pop(ctx, channel:discord.Option(discord.TextChannel,description="Shop Channel to close")):
+#@bot.slash_command(guild_ids=[variables['guild_id']],description="NOT FINISHED - SCARY WIP - Repopulates the shop this command is ran in.")
+#@discord.ext.commands.has_role(variables['shop_admin_id'])
+async def pop(ctx):
     # TODO: Finish
 
-    # So basically grab data from SQL and edit messages with new? shop embeds. Just going to copy and paste my code from import_from_sql
+    await ctx.respond("Ok! (Surely this'll work juuust fine)", ephemeral=True)
 
-    result = database.query(f"SELECT * FROM shops WHERE shop_channel_id = {channel.id}")
-    #   0    1                2     3       4            5               6            7               8            9               10         11          12            13               14        15           16            17            18             19              20
-    #[( id#, shop channel id, name, coords, owner1 name, owner1 discord, owner2 name, owner2 discord, owner3 name, owner3 discord, shop init, large shop, service shop, image (varchar), district, district id, scmessage id, scstatmsg id, ocembedmsg id, reclaim msg id, shop status (Open or Closed) )]
+    channel = ctx.channel
+    logger.log(f"Repopulating {channel.name}","[INFO] ")
+
+
+    result = database.query(f"SELECT shop_id, shop_name, coords, shop_init, large_shop, service_shop, image, mc_owners, discord_owners FROM shops WHERE shop_channel_id = {channel.id}")
+    #                                0        1          2       3          4           5             6      7          8
+
+    # TODO: You ever get feeling something REALLY bad is going to happen?
 
     if len(result) <= 0 and not forbidden_name.fullmatch(channel.name):
         await ctx.respond("Not a valid Shop.",ephemeral=True)
 
     # Reconstruct Shop info to feed into construct_shop_embeds
     s = result[0]
+
+    result_two = database.query(f"SELECT shop_status, checked_by_id, date_and_time  FROM shop_checks WHERE shop_id = {s[0]}")
+    #                                    0            1              2
+    sc = result_two[0]
+
     shop_info = \
         {
-            "shop_name": s[2],
-            "shop_coords": s[3],
-            "owners_mc_list": s[21],
-            "owners_discord_list": s[22]
+            "shop_name": s[1],
+            "shop_coords": s[2],
+            "owners_mc_list": s[7].split("|"),
+            "owners_discord_list": s[8].split("|"),
+            "initialized": s[3],
+            "large_shop": s[4],
+            "service_shop": s[5],
+            "shop_image_url": s[6],
+            "status":sc[0],
+            "next_check":f"<t:{get_next_check_deadline(sc[2])}:f>",
+            "last_checked_by":f"<@{sc[1]}>",
+            "last_checked":f"<t:{int(sc[2].timestamp())}:f>"
         }
 
     # Reconstruct shop embeds
     embeds = construct_shop_embeds(shop_embeds_template,shop_info)
 
-    # Edit messages OR Send messages if not enough exist.
-    # Delete excess BOT messages
+    # MSG INDEX 0 = Main Shop Info
+    # FILED 0 = Owners
+    # FIELD 1 = Initialized
+    # FIELD 2 = Large Shop
+    # Field 3 = Service Shop
+    # Field 4 = Warnings within 3 months <- adding this *shouldn't* break anything
+
+    # MSG INDEX 1 = Status Legend
+    # MSG INDEX 2 = Shop Status & To do
+    # FIELD 0 = Status:
+    # FIELD 1 = Next Check Due:
+    # FIELD 2 = Last checked by:
+    # FIELD 3 = Where to do will exist when needed
+
+    # MSG INDEX 3 = Shop check command and where to put message template for sending
+
+    # TODO: Make it so that if /pop is ran when the bot has a todo message and other reactions, it should put them back (for when its being warned, or reclaimed)
+
+    messages = await get_shop_channel_history(ctx.channel)
+
+    if messages is False:
+        logger.log(f"Deleting any present messages...","[INFO] ")
+
+        for m in messages:
+            await m.delete()
+
+        logger.log(f"Resending shop messages for {shop_info['shop_name']}...","[INFO] ")
+
+        for i, e in enumerate(embeds):
+            sent_message = await channel.send(embeds=embeds[i])
+
+            if i == 0:
+                for react in ['✅', '⚠️', '❌']:
+                    await sent_message.add_reaction(emoji=react)
+
+    else:
+        await messages[0].edit(embeds=[embeds[0]])
+        await messages[1].edit(embeds=[embeds[1]])
+        await messages[2].edit(embeds=[embeds[2]])
+        await messages[3].edit(embeds=[embeds[3]])
+
+    await ctx.respond("Done?",ephemeral=True)
 
 # !mb help
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Displays a list of commands.")
