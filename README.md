@@ -1,4 +1,4 @@
-# Python Marketplace Discord Bot, Version: Alpha - 9.10.2026
+# Python Marketplace Discord Bot, Version: Alpha - 9.14.2026
 ###### By: EnvyingGolem47 - *( I have no relation to Discord, my opinions are my own and not representative of Discord.)*
 
 Built for Project Nebula.
@@ -9,11 +9,15 @@ I'll fill this out better later (trust)
 
 - Download as a zip file
 - Set up mysql server and database
+- Set up a nginx webserver & SFTP server in the same space 
+  - SFTP Server must be able to access nginx webserver files
+  - Ideally it should be the ONLY thing it can access
 - Install python 3.12
 - Install dependencies
   - `pip install "superutilities==0.2.5"`
   - `pip install "py-cord==2.7.1"`
   - `pip install "mysql-connector-python==26.7.0"`
+  - `pip install "paramiko==5.0.0"`
 - Extract zip file to desired folder
 - Run bot.py and follow the first startup instructions
 
@@ -21,6 +25,7 @@ I'll fill this out better later (trust)
 
 
 # <u>Code Documentation (to be moved)</u>:
+- goal is to make a wiki
 
 ## Shop creation documentation
 
