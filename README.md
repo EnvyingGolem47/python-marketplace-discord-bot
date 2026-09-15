@@ -1,5 +1,5 @@
 # Python Marketplace Discord Bot, Version: Alpha - 9.14.2026
-###### By: EnvyingGolem47 - *( I have no relation to Discord, my opinions are my own and not representative of Discord.)*
+###### By: EnvyingGolem47
 
 Built for Project Nebula.
 
