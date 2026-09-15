@@ -4,6 +4,8 @@
 # Python Marketplace Discord Bot - Built for Project Nebula
 #
 # Updated: 9/15/2026 - EnvyingGolem47
+#
+# Please no judgment on how poorly my code looks :)
 
 import datetime
 import time
@@ -48,6 +50,7 @@ debug_mode = False
 # TODO: Update how districts are handled to allow the use of shop counts. And also find an optimized way of counting the shops rather than an sql query or api call.
 # TODO: Remove all DEV Commands, and Stopwatches when done
 # TODO: Final decision on logger
+# TODO: Go through and mark off each actually completed TODO comment (some were done a while ago but never removed)
 
 # The shop_ticket_process dictionary is how the bot goes through and runs the shop creation process.
 #  I made it this way to help maintain reliability within a shop creation ticket. Even if the bot goes offline or breaks, it can be easily recovered, without starting over.
@@ -675,11 +678,15 @@ def construct_shop_embeds(embeds_template_og:list[dict],shop_info:dict):
 
 def get_next_id() -> int:
     """
-    Returns the next ID. Autoincrements.
+    Returns the next Shop ID. Autoincrements.
+
+    Ok so, I think this is fine to keep the way it is. The only thing that *should* be a problem is the ticket channel numbers wont actually make any sense.
+    The actual shop creation process should be fine.
 
     :return:
     """
 
+    # TODO: Verify this function is fine to leave as is
     # TODO: Keep in sync with SQL Data (Maybe? Might not be needed)
     try:
         result = database.query("SELECT MAX(shop_id) FROM shops;")
@@ -1717,7 +1724,7 @@ DONE !mb create : Creates a shop ticket. Respond to the prompts in the ticket to
 
 !mb pop : Repopulates a shop channel in the event a shop channel is made and doesn't populate, or if the bot breaks before the embeds post. Only @Shop Check Admin should be able to use this command. This command may only be used in a shop channel.
 
-PENDING !mb closeshop : Closes the shop. Takes a transcript of the channel and deletes the channel. Should only be used by @Shop Check Admin and only if the shop has been demolished, auctioned, or otherwise closed. This command should only be able to used in a shop channel.
+DONE but needs work !mb closeshop : Closes the shop. Takes a transcript of the channel and deletes the channel. Should only be used by @Shop Check Admin and only if the shop has been demolished, auctioned, or otherwise closed. This command should only be able to used in a shop channel.
 
 DONE !mb change shopname "<old shop name>" "<new shop name>" : Changes the name of a shop and repopulates embeds for the shop channel. Usable only by @Staff
 
@@ -1733,7 +1740,7 @@ DONE !mb update owner1 "<shop name>" "<new name>" "<new owner discord ID>" : Cha
 
 DONE RENAMED !mb newimage "<shop name>" : Changes the image for the shop named in "shop name". This command may only be used in a district comments channel! Usable only by @Staff
 
-IGNORE !mb closeticket <ticket#> : Closes the ticket with the ticket number entered and sends a transcript to #shop-ticket-logs. Usable only by @Shop Check Admin.
+IGNORE just delete the channel instead !mb closeticket <ticket#> : Closes the ticket with the ticket number entered and sends a transcript to #shop-ticket-logs. Usable only by @Shop Check Admin.
 
 DONE !mb search <search term> : allows you to search for shops based on various attributes such as the shop's name, owner names, and owner Discord IDs
 
