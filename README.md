@@ -14,7 +14,7 @@ I'll fill this out better later (trust)
   - Ideally it should be the ONLY thing it can access
 - Install python 3.12
 - Install dependencies
-  - `pip install "superutilities==0.2.5"`
+  - `pip install "superutilities==0.2.6"`
   - `pip install "py-cord==2.7.1"`
   - `pip install "mysql-connector-python==26.7.0"`
   - `pip install "paramiko==5.0.0"`

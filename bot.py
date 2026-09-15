@@ -23,7 +23,7 @@ from superutilities import SInput, SanitizeString, getJsonFromFile, saveJsonToFi
 import mysql.connector
 import paramiko
 
-image_folder = "data/images/"
+data_folder = "data/"
 memory_folder = "system/memory/"
 logs_folder = "data/logs/"
 # The system folder should already be there, as the files in it are not meant to be deleted, modified, or moved by the user
@@ -35,7 +35,6 @@ sql_template_file = f"system/sql_template.sql"
 emoji_to_staff_member_file = "data/baguette_config.json"
 
 logger = Logger(logs_folder)
-logger.log("==== BOT STARTING UP ====")
 
 forbidden_name = re.compile(r"🗒-district-[0-9]+-comments", re.IGNORECASE)
 district_regex = re.compile(r"District [0-9]+")
@@ -269,8 +268,10 @@ class DatabaseHandler:
         self.username = username
         self.password = password
         self.port = port
-        self.connection = mysql.connector.connect(host=self.url,database=self.database_name,user=self.username,password=self.password,port=self.port,autocommit=True)
+        self.connection = None # mysql.connector.connect(host=self.url,database=self.database_name,user=self.username,password=self.password,port=self.port,autocommit=True)
         self.query_queue = []
+
+        self.connect_to_database()
 
     def connect_to_database(self):
         self.connection = mysql.connector.connect(host=self.url, database=self.database_name, user=self.username,
@@ -289,13 +290,20 @@ class DatabaseHandler:
 
         cursor = self.connection.cursor(buffered=True)
         cursor.execute(query)
-        return cursor.fetchall()
+
+        if cursor.rowcount > 0 and cursor.with_rows: # Ok so, this is really weird, but apparently if the rowcount is 0 it will error but ONLY if I'm running on Bloomhost's stuff, everywhere else is fine. No, I do not know why...
+            return cursor.fetchall()
+        else:
+            return []
+
 
     def query_script(self,file_path):
         """
         Similar to query, but runs an .sql script file.
 
         For some reason this will disconnect you from the database, so you MUST reconnect afterwards. (No, I do not know why)
+
+        Does NOT return anything.
 
         :param file_path:
         :return:
@@ -304,7 +312,6 @@ class DatabaseHandler:
         file = open(file_path,'r')
         file_data = file.read()
         cursor.execute(file_data)
-        return cursor.fetchall()
 
     def queue_query(self,query:str):
         """
@@ -401,6 +408,24 @@ class Stopwatch:
         self.end_time = datetime.datetime.now()
         debug(f"{self.label} : {self.end_time - self.start_time}")
 
+def check_directories():
+    """
+    Checks to make sure all directories are present.
+
+    :return:
+    """
+    for d in [data_folder,memory_folder,logs_folder]:
+        try:
+            os.mkdir(d)
+
+        except FileExistsError:
+            pass
+
+        except PermissionError:
+            print("UNABLE TO CREATE DIRECTORIES - INVALID PERMISSIONS")
+            input("Press enter to close:")
+            raise KeyboardInterrupt
+
 # Just a small function to allow quick toggling of debug focused print statements. Look for debug_mode variable
 def debug(txt:str):
     """
@@ -449,24 +474,6 @@ def get_current_discord_timecode():
     current_datetime = datetime.datetime.now()
     return int(current_datetime.timestamp())
 
-def check_directories():
-    """
-    Checks to make sure all directories are present.
-
-    :return:
-    """
-    for d in [image_folder,memory_folder,logs_folder]:
-        try:
-            os.mkdir(d)
-
-        except FileExistsError:
-            pass
-
-        except PermissionError:
-            logger.log("UNABLE TO CREATE DIRECTORIES - INVALID PERMISSIONS","[CRITICAL] ")
-            input("Press enter to close:")
-            raise KeyboardInterrupt
-
 def get_variables() -> dict:
     """
     Retrieves the data in variables.json, or if it doesn't exist, create and fill in a new one.
@@ -483,26 +490,26 @@ def get_variables() -> dict:
         logger.log("COULD NOT FIND/LOAD VARIABLES FILE!", tag="[CRITICAL] ")
         print("Please follow these prompts to create a new one.")
 
-        token = SInput("Please enter your bot token: ")
-        guild_id = SInput("Please enter your Discord server's ID: ", IsInt=True)
-        ticket_category_id = SInput("Please enter the category ID where you want Shop Tickets to be created in: ", IsInt=True)
-        images_channel_id = SInput("Please enter the channel ID where you want Shop Images to be stored: ", IsInt=True)
-        transcript_channel_id = SInput("Please enter the channel ID where you want Shop Transcripts to be stored: ", IsInt=True)
-        shop_admin_id = SInput("Please enter the Shop Admin Role ID: ", IsInt=True)
-        shop_staff_id = SInput("Please enter the Staff Role ID: ", IsInt=True)
+        token = SInput("Please enter your bot token: ", printQuestion=True)
+        guild_id = SInput("Please enter your Discord server's ID: ", IsInt=True, printQuestion=True)
+        ticket_category_id = SInput("Please enter the category ID where you want Shop Tickets to be created in: ", IsInt=True, printQuestion=True)
+        images_channel_id = SInput("Please enter the channel ID where you want Shop Images to be stored: ", IsInt=True, printQuestion=True)
+        transcript_channel_id = SInput("Please enter the channel ID where you want Shop Transcripts to be stored: ", IsInt=True, printQuestion=True)
+        shop_admin_id = SInput("Please enter the Shop Admin Role ID: ", IsInt=True, printQuestion=True)
+        shop_staff_id = SInput("Please enter the Staff Role ID: ", IsInt=True, printQuestion=True)
 
-        sql_hostname = SInput("Please enter your SQL Server's Hostname: ")
-        sql_database_name = SInput("Please enter your SQL Server's Database name: ")
-        sql_username = SInput("Please enter your SQL Server's Username: ")
-        sql_password = SInput("Please enter your SQL Server's Password: ")
-        sql_port = SInput("Please enter your SQL Server's Port Number: ",IsInt=True)
+        sql_hostname = SInput("Please enter your SQL Server's Hostname: ", printQuestion=True)
+        sql_database_name = SInput("Please enter your SQL Server's Database name: ", printQuestion=True)
+        sql_username = SInput("Please enter your SQL Server's Username: ", printQuestion=True)
+        sql_password = SInput("Please enter your SQL Server's Password: ", printQuestion=True)
+        sql_port = SInput("Please enter your SQL Server's Port Number: ",IsInt=True, printQuestion=True)
 
-        sftp_hostname = SInput("Please enter your SQL Server's Hostname: ")
-        sftp_username = SInput("Please enter your SQL Server's Username: ")
-        sftp_password = SInput("Please enter your SQL Server's Password: ")
-        sftp_port = SInput("Please enter your SQL Server's Port Number: ",IsInt=True)
-        sftp_image_directory = SInput("Please enter the directory where your images are being stored in the SFTP server: ")
-        image_url_prefix = SInput("Please enter the URL Prefix for where images are being hosted.\n(Example: 'test.com/image.png' you would put 'test.com/')\n: ")
+        sftp_hostname = SInput("Please enter your SFTP Server's Hostname: ", printQuestion=True)
+        sftp_username = SInput("Please enter your SFTP Server's Username: ", printQuestion=True)
+        sftp_password = SInput("Please enter your SFTP Server's Password: ", printQuestion=True)
+        sftp_port = SInput("Please enter your SFTP Server's Port Number: ",IsInt=True, printQuestion=True)
+        sftp_image_directory = SInput("Please enter the directory where your images are being stored in the SFTP server: ", printQuestion=True)
+        image_url_prefix = SInput("Please enter the URL Prefix for where images are being hosted.\n(Example: 'test.com/image.png' you would put 'test.com/')\n: ", printQuestion=True)
 
         variables_data = \
             {
@@ -558,8 +565,9 @@ def load_district_role_mappings():
         saveJsonToFile(district_role_mappings_file,{})
         return {}
 
-logger.log("Loading variables...", tag="[INFO] ")
 check_directories()
+logger.log("==== BOT STARTING UP ====")
+logger.log("Loading variables...", tag="[INFO] ")
 variables = get_variables()
 emoji_dict = load_emojis()
 district_role_mappings = load_district_role_mappings()
@@ -791,9 +799,15 @@ async def store_image(guild,attachment:discord.Attachment):
     return stored_url
 
 async def notify_district(district_number:int,msg:str,channel_list) -> bool:
-    # TODO: FINISH
-    # TODO: DO NOT USE RIGHT NOW, NEEDS SOME MORE TWEAKING TO MAKE WORTH HAVING IT
+    """
+    Sends the desired message to a district's comments channel.
+    Will @ the role as well (if defined).
 
+    :param district_number:
+    :param msg:
+    :param channel_list:
+    :return:
+    """
     if "<DISTRICT_ROLE>" in msg:
         msg.replace("<DISTRICT_ROLE>",f"<@&{district_role_mappings[district_number]}>")
 
@@ -816,6 +830,16 @@ async def notify_district(district_number:int,msg:str,channel_list) -> bool:
     return True
 
 async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_info=None,shop_already_in_database:bool=False) -> bool | None:
+    """
+    Creates a shop channel from a ticket channel.
+
+    Can also create one using premade_shop_info if needed.
+
+    :param ticket_channel:
+    :param premade_shop_info:
+    :param shop_already_in_database:
+    :return:
+    """
 
     # guild = await bot.fetch_guild(variables["guild_id"])
 
@@ -928,7 +952,7 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
             # TODO: Possibly don't include if we're starting over with a blank slate.
             # TODO: Actually if we do start over with a blank slate, lets make all new records that have the okay status for the shops
 
-            last_check = database.query(f"SELECT shop_status, checked_by_id, date_and_time FROM shop_checks WHERE shop_id = {shop_info['sql_id']}")[0]
+            last_check = database.query(f"SELECT shop_status, checked_by_id, date_and_time FROM shop_checks WHERE shop_id = {shop_info['sql_id']} ORDER BY shop_check_id ASC")[0]
 
             shop_info['status'] = f"{last_check[0]}"
             shop_info['next_check'] = f"<t:{temp_2}:f>"  # <t:1776276900:f>
@@ -1118,23 +1142,6 @@ def get_shop_id_from_channel_id(channel_id:int):
         temp_shop_id = shop_id_cache[channel_id_str]
 
     return temp_shop_id
-
-def cache_sql_data():
-
-    """
-
-    OK So for some reason SQL queries are taking the most amount of time. I'm not sure if thats because of my testing enviroment or if it is really taking the long.
-    In anycase it looks like it's a problem so I need to at least mitigate it somehow.
-
-    TODO: Thinking at bot launch to grab a large query of shops.
-
-    TODO: ok nevermind because the problem is with shop checks... and cahcing that is too much for this
-
-    :return:
-    """
-
-
-    pass
 
 # END OF TESTING THIS OUT ==============================================================================================================
 
@@ -1501,6 +1508,7 @@ async def on_raw_reaction_add(reaction_data):
             # TODO: Create function to create the new shop
             debug("Creating new shop - reaction")
             debug("Not implemented yet") # Remove when implemented
+            logger.log("Reaction Add Shop Creation Triggered (it doesn't exist)","[?????] ") # Funny confused tag
             pass
 
     # SHOP CHECK PROCESS
@@ -1685,14 +1693,32 @@ async def on_raw_reaction_add(reaction_data):
                 new_embed.add_field(name="To do:", value=to_do_text)
                 debug("Add field")
 
-            await shop_message_history[2].edit(embeds=[new_embed])
+            # await shop_message_history[2].edit(embeds=[new_embed])
+
+            # TODO: Add in message template that can be sent to the shop owner
+            # TODO: TEST THIS
+
+
+
+            raw_owners_text = shop_message_history[0].embeds[0].fields[0].value
+            owners_list = raw_owners_text.split("\n")
+            primary_owner_mc = owners_list[0].split(" (")[0]
+            primary_owner_discord = owners_list[0].split(" (")[1].replace(")", "")
+
+            shop_name = shop_message_history[0].embeds[0].title.split(" (")[0]
+
+            message_to_send_text = f"""Hi {primary_owner_mc}! This is a quick message to let you know that your shop, {shop_name}, **has been deemed inactive for 4 weeks and will be reclaimed and put up for auction.** As a reminder, inactivity is defined as not keeping a fresh supply of stock within your shop and/or having unclaimed payments within your shop. Any items and materials reclaimed from your shop will be put towards funding community projects and events. Thanks!"""
+
+            message_to_send_embed = discord.Embed(color=10181046,
+                                                  title=f"Owner Contact Message - {primary_owner_discord}",
+                                                  description=message_to_send_text)
+
+            await shop_message_history[2].edit(embeds=[new_embed, message_to_send_embed])
 
             for r in ("1️⃣","2️⃣","3️⃣","4️⃣"):
                 await shop_message_history[2].add_reaction(r)
 
             await log_shop_check_activity(shop_message_history[0], channel.id, reaction_user.id, "❌ Reclaim")
-
-            # TODO: Add in message template that can be sent to the shop owner
 
 
         # IF ENVELOPE EMOJI
@@ -1710,6 +1736,18 @@ async def on_raw_reaction_add(reaction_data):
             await shop_message_history[2].edit(embeds=[new_embed])
 
             await msg.clear_reaction(react_emoji)
+
+        if react_emoji == "1️⃣":
+
+            if len(shop_message_history[2].embeds) > 1:
+
+                current_embed = shop_message_history[2].embeds[0]
+
+                await shop_message_history[2].edit(embeds=[current_embed])
+
+            else:
+
+                await msg.clear_reaction(react_emoji)
 
         try:
             await msg.remove_reaction(react_emoji,reaction_user)
@@ -1777,8 +1815,8 @@ async def create(ctx):
         await ctx.respond("Error creating ticket...\nPlease contact Admins.", ephemeral=True)
 
 # !mb pop
-#@bot.slash_command(guild_ids=[variables['guild_id']],description="NOT FINISHED - SCARY WIP - Repopulates the shop this command is ran in.")
-#@discord.ext.commands.has_role(variables['shop_admin_id'])
+@bot.slash_command(guild_ids=[variables['guild_id']],description="NOT FINISHED - SCARY WIP - Repopulates the shop this command is ran in.")
+@discord.ext.commands.has_role(variables['shop_admin_id'])
 async def pop(ctx):
     # TODO: Finish
 
@@ -1966,7 +2004,7 @@ async def update_image(ctx, channel:discord.Option(discord.TextChannel,descripti
         await ctx.respond("Invalid Channel", ephemeral=True)
         return
 
-    await ctx.respond(f"Updating <#{channel.id}>")
+    await ctx.respond(f"Updating <#{channel.id}>'s Image",ephemeral=True)
     url = await store_image(primary_guild,image)
 
     shop_message_history = await get_shop_channel_history(channel)
@@ -1996,6 +2034,8 @@ async def update_image(ctx, channel:discord.Option(discord.TextChannel,descripti
     new_embed.set_image(url=url)
 
     await shop_message_history[0].edit(embeds=[new_embed])
+
+    database.query(f"UPDATE shops SET image = \"{url}\" WHERE shop_channel_id = \"{channel.id}\"")
 
 # New command to update information about a shop
 # !mb change shopname, coords, largeshop, serviceshop
@@ -2380,6 +2420,7 @@ async def import_from_sql(ctx):
     :return:
     """
     # TODO: Finish
+    # TODO: Fix NONE owner being listed for some reason
     await ctx.respond("Importing from SQL Database... This **WILL** take a while. (Will respond when done)")
     logger.log("Importing from SQL Database... This will take a while.", "[INFO] ")
 
@@ -2397,11 +2438,12 @@ async def import_from_sql(ctx):
         temp_owners.append(s[4])
         temp_owners_discord.append(s[5])
 
-        if s[6] is not None:
+        # It really is hit or miss at this point
+        if s[6] is not None and s[6] != "None":
             temp_owners.append(s[6])
             temp_owners_discord.append(s[7])
 
-        if s[8] is not None:
+        if s[8] is not None and s[6] != "None":
             temp_owners.append(s[8])
             temp_owners_discord.append(s[9])
 
@@ -2438,6 +2480,8 @@ async def import_from_sql(ctx):
     result = database.query("SELECT * FROM shop_checks;")
     count = 0
     for sc in result:
+        if sc[3] is None:
+            continue
         try:
             new_datetime = datetime.datetime.strptime(sc[3].strip(), "%m-%d-%Y %I:%M %p")
         except ValueError:
@@ -2472,9 +2516,11 @@ async def reformat_shop_checks_sql(ctx):
     result = database.query("SELECT * FROM shop_checks;")
     count = 0
     for sc in result:
+        if sc[3] is None:
+            continue
         try:
             new_datetime = datetime.datetime.strptime(sc[3].strip(), "%m-%d-%Y %I:%M %p")
-        except ValueError or AttributeError:
+        except ValueError:
             continue
 
         database.query(f"UPDATE shop_checks SET date_and_time = \"{str(new_datetime).split('.')[0]}\" WHERE shop_check_id = {sc[0]};")
