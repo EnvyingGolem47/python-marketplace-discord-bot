@@ -1348,7 +1348,7 @@ async def on_raw_reaction_add(reaction_data):
     # Check if the emoji is a valid emoji first
     react_emoji = str(reaction_data.emoji)
     if react_emoji not in ("✅", "⚠️", "❌", "✉️", '✅', '🇾', '🇳', '❌', ':white_check_mark:', ':regional_indicator_y:',
-                           ':regional_indicator_n:'):
+                           ':regional_indicator_n:','1️⃣','2️⃣','3️⃣','4️⃣'):
         debug("Reaction not valid")
         return
 
@@ -1737,7 +1737,10 @@ async def on_raw_reaction_add(reaction_data):
 
             await msg.clear_reaction(react_emoji)
 
+        # IF REGIONAL 1 INDICATOR EMOJI
         if react_emoji == "1️⃣":
+
+            debug("️1️⃣ react found")
 
             if len(shop_message_history[2].embeds) > 1:
 
@@ -1745,12 +1748,19 @@ async def on_raw_reaction_add(reaction_data):
 
                 await shop_message_history[2].edit(embeds=[current_embed])
 
-            else:
+        # IF REGIONAL 4 INDICATOR EMOJI
+        if react_emoji == "4️⃣":
 
-                await msg.clear_reaction(react_emoji)
+            debug("️4️⃣ react found")
+
+            new_name = channel.name.replace(f"{channel.name[0]}", "❌")
+
+            await channel.edit(name=new_name)
+
 
         try:
-            await msg.remove_reaction(react_emoji,reaction_user)
+            if react_emoji not in ["1️⃣","2️⃣","3️⃣","4️⃣"]:
+                await msg.remove_reaction(react_emoji,reaction_user)
             sw.stop()
         except:
             pass
