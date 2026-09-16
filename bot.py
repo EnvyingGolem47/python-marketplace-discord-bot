@@ -3,7 +3,7 @@
 #
 # Python Marketplace Discord Bot - Built for Project Nebula
 #
-# Updated: 9/15/2026 - EnvyingGolem47
+# Updated: 9/16/2026 - EnvyingGolem47
 #
 # Please no judgment on how poorly my code looks :)
 
@@ -70,6 +70,8 @@ debug_mode = False
 # response_regex is the regex that the answer is expected to match ( ANY bypasses the check ) ( NUMBER will use .isdigit instead )
 # yes_response (for REACTION_YES_OR_NO & REACTION_CHECKMARK) determines the sub process triggered for a YES ( NORMAL proceeds with main ticket process )
 # no_response (for REACTION_YES_OR_NO) determines the sub process triggered for a NO ( NORMAL proceeds with main ticket process )
+# max_number (for NUMBER) maximum number value that can be used
+# min_number (for NUMBER) minimum number value that can be used
 # stored_variable is the variable the response will be stored in
 shop_ticket_process = \
     {
@@ -139,6 +141,8 @@ shop_ticket_process = \
             {"response_type":'MESSAGE',
              "message_regex":r'Thanks! Last thing! Send the district number this shop belongs in!',
              "response_regex":r"NUMBER",
+             "max_number":10,
+             "min_number":1,
              "stored_variable":"district_number"}
     }
 
@@ -251,6 +255,244 @@ shop_embeds_template = \
             "title": "Shop Check Command"
         }
     ]
+
+# This template stores the data to generate and send embed guide messages (These are static once set here and don't change).
+guides_template = \
+    [
+        {
+            "color": 3447003,
+            "type": "rich",
+            "title": "Adding a Shop",
+            "description": f"""To add a shop, use the command /create. A new ticket will be created. Respond to the prompts in the ticket to create your shop!"""
+        },
+        {
+            "color": 3447003,
+            "type": "rich",
+            "title": "Weekly Shop Checks",
+            "description": f"""Shops are checked weekly to ensure the owner is active. All shops are assigned to a certain district and the staff members
+assigned to that district will check the shop each week for inactivity.
+
+- Weekly activity checks may not be done by the owner of the shop if the owner happens to also be a staff member. Staff are assigned districts with this rule in mind.
+
+- Shops must be checked for inactivity by each Sunday night at 11:59 PST. Shops may be checked before the weekly deadline, but try to maintain a 5-7 day spacing between checks. For example, checking a shop one week on Friday and checking the same shop the next week on Thursday is acceptable. Remember, this does not have to be an exact science! Just do what you can to maintain consistency.
+
+- If you buy a shop in your own district, you must have someone else do your shop checks for your shop. You may not do your own shop checks. Either ask your district partner to check your shop, or get a floater to do it. See below.
+
+- If you and your district partners are not able to check any of your shops for the week, please send a message in #serious-staff-chat help."""
+        },
+        {
+            "color": 3447003,
+            "type": "rich",
+            "title": "Shop Check Procedure",
+            "description": f"""Shops can easily be checked with the following in-game command:
+`/co lookup user:<player> time:2w action:container radius:<radius>`
+
+<player> : The shop owner's IGN goes here. This can be retrieved from the data at the top of the shop's channel.
+<radius> : Whatever radius you feel is necessary to fit the size of the shop. 5-10 is generally good and will show you results, but you may need to change this if nothing comes back and further investigation is needed.
+
+Use this command while standing in/near the shop. If the command shows you that the owner has interacted with any of their stock in the past 2 weeks, then you can mark the shop as OK with the "Shop Check - OK" button on Trello and you're good to go!
+If the command returns no data, then the old procedure applies; check if the shop has stock and/or unclaimed diamonds.
+
+:white_check_mark: **OK** - Click this button to mark a shop or service shop as OK for the week.
+
+:warning: **Warning** - Click this if you need to contact an owner about inactivity. You will get a new to do list. If the last shop check was OK, then you will also get a message you must send to the shop owner. Complete all of the steps on the to do list and post a screenshot of your communication with the shop owner in your district comments channel. Check on the shop again for your next shop check.
+
+:x: **Reclaim** - Click this if the shop owner has not resolved the inactivity for 2 weeks. Clicking this button will give the shop a checklist of steps to reclaim a shop. All items on the checklist must be checked completed by reacting to the status post. Once steps have been completed, the checklist will disappear and the shop will automatically move to the Prep For Auction category."""
+        },
+        {
+            "color": 3447003,
+            "type": "rich",
+            "title": "Large and Tall Shops",
+            "description": f"""- Shops may not occupy a space larger than 25 blocks in any direction without staff approval. This includes the entrance. Shops larger than this must have a blueprint built on our creative server shown to a staff member to inspect, as well as a footprint marked out for the space you plan to use in the marketplace.
+
+- Large shops exceed 25 blocks in the X or Z direction. Players may build large shops in the market OR mini-market. Both are acceptable.
+
+- Tall shops exceed 25 blocks in the Y direction. Tall shops may only be built in the north half of the marketplace. Tall shops may NOT be built in the mini-market.
+
+- Players can request approval for large and tall shops via a ticket in #make-a-shop (Project Nebula Server).
+
+- For a shop to be approved, there must be 3 blocks between it and any surrounding shops, unless they received permission from the affected nearby shop owners. This restriction includes air and underground blocks. The build must work for the area they have chosen, both aesthetically and functionally. For example, a large build over a river that doesn't incorporate the surrounding area at all might be better served somewhere else in the marketplace with more open land. Approvals are generally more about using your own judgement. It's okay to ask other staff for their opinions too!
+
+- Once the build is approved, the player must mark out the area in which they intend to build and have that approved by staff as well.
+
+- Large and tall shops require a payment of 1 diamond block at creation or successful auction. Staff can collect the diamond block at an agreed upon location and store it in our current staff storage area. A shop which is both large and tall only requires a payment of 1 diamond block.
+
+- Staff may not approve their own shop or plans. Approval must be by another staff member."""
+        },
+        {
+            "color": 3447003,
+            "type": "rich",
+            "title": "Service Shop Check Procedure",
+            "description": f"""Service shops are shops that do not sell items that could be stored in a player's inventory. Instead, they sell a service, such as bedrock breaking, building, etc. Since there is no physical inventory to check for, the process to check for inactivity is a bit different than the one used for item shops.
+
+**To check for activity in service shops, use the following in-game command:**
+/co lookup user:<player> action:session
+
+<player> : The shop owner's IGN goes here. This can be retrieved from the data at the top of the shop's channel.
+
+The command will show you a list of all logins and logouts, the amount of time that has elapsed since each login/out, and the in-game XYZ/World location of the login/out. For example:
+
+```----- CoreProtect Lookup Results -----
+4.91/d ago -  BittenSpider logged out.
+              ^ (x27/y133/z29/world_nether)
+4.95/d ago -  BittenSpider logged in.
+              ^ (x187/y58/z152/world)```
+
+
+- If the shop owner has logged in/out any time in the past 4 weeks (28 days), then you can click the "Shop Check - OK" button on the Marketplace Trello and you're good to go!
+
+- If 4 or more weeks (28 days) have passed since the shop owner's last login, send them a message on discord informing them that their shop is being reclaimed by the marketplace committee. You should see a template message that can be sent to the shop owner in the shop's to do list on discord. This can be pasted to the owner. Then, reclaim any items from the shop and store them in the staff storage area."""
+        },
+        {
+            "color": 3447003,
+            "type": "rich",
+            "title": "Demolishing Shops",
+            "description": f"""- If a shop is put up for auction and does not get bid on, it will be demolished and the materials stored in the staff storage area.
+
+- Former shop owners do NOT get their stock and materials back once their shop has been reclaimed. These materials are used to fund community projects and events.
+
+- If there is any indication or feeling that a shop build may want to be preserved, please grab a schematic of it before demolition. If you are unsure how to do this, ask in one of the staff channels. Many of us know how to save schematics.
+
+- ONLY the people in charge of the district a shop is in should be demoing that shop. And they should be paying close attention to the Trello card when/if they do so. All communication regarding a shop should be done in the comments of the card, so it's particularly important to read everything on the card before destroying anything at any point in the shop check/reclaim/sell/demo process.
+
+- In the event that all of the staff in a district are unable to demolish a shop, only @Shop Check Admin should be acting as fill ins or designating others to demolish the shop."""
+        }
+    ]
+
+# This template stores the data for the help command (These are static once set here and don't change)
+help_template = \
+    [
+        {
+            "color": 3447003,
+            "type": "rich",
+            "title": "Help Page",
+            "description": f"""## Staff Commands:
+- **/help** : `Sends this list.` Fill out the "command" variable to get help with a specific command.
+
+- **/create** : `Creates a shop channel ticket to begin making a shop.`
+
+- **/claim** : `Claims a shop for you to check.`
+
+- **/update_image** : `Updates a shop's image to a new one.`
+
+- **/update_shop** : `Updates a shop's name, coords, its large shop status, or it's service shop status.`
+
+- **/update_owner** : `Updates the owner(s) of a shop.`
+
+## Admin Commands:
+- **/pop** : `(STILL WIP) Repopulates the shop channel this command is ran in.`
+
+- **/close_shop** : `Closes a reclaimed shop, deletes the channel, and saves a transcript.`
+
+- **/move_shop** : `Moves a shop to a different District.`
+
+- **/report** : `Generates a report of unchecked shops.`
+
+- **/generate_guides** : `Sends embeds of guides where you run it. *Don't use unless you are actually updating the guides*`"""
+        }
+    ]
+
+# This contains the "manuals" for each command. These can be accessed with the /help command.
+command_manuals = \
+    {
+        "help": f"""._.
+
+`/help <command>`
+
+**<command> (Optional)** : Type in the command you wish to get help with.""",
+        "create": f"""`/create`
+
+Creates a shop channel ticket to begin making a shop. 
+
+This command takes in no parameters.""",
+        "claim": f"""`/claim <channel>`
+
+Claims a shop for you to check.
+
+**<channel>** : Select the Shop channel you wish to claim. *(This should show up as a list in discord)*
+""",
+        "updateimage": f"""`/update_image <channel> <image>`
+
+Updates a shop's image to a new one.
+
+**<channel>** : Select the Shop channel you wish to update the image of. *(This should show up as a list in discord)*
+
+**<image>** : Upload the image you wish to replace the old one with. *(This should show up as an upload box in discord)*
+""",
+        "updateshop": f"""`/update_shop <channel> <shop_name> <coords> <large_shop> <service_shop>`
+
+Updates a shop's name, coords, its large shop status, or it's service shop status.
+
+**<channel>** : Select the Shop channel you wish to update. *(This should show up as a list in discord)*
+
+**<shop_name>** (Optional) : The name you want to change the shop's name to.
+
+**<coords>** (Optional) : The coords you want to update the shop coords to.
+
+**<large_shop>** (Optional) : True or False. Whether or not it is a large/tall shop.
+
+**<service_shop>** (Optional) : True or False. Whether or not it is a service shop.
+""",
+        "updateowner": f"""`/update_owner <channel> <owner_number> <mc_name> <discord_name>`
+
+Updates the owner(s) of a shop.
+
+**<channel>** : Select the Shop channel you wish to update the owners of. *(This should show up as a list in discord)*
+
+**<owner_number>** : Enter the owner you wish to make changes to. (1, 2, 3..)
+
+NOTE: The next 2 commands are optional, but if you fill out one, you **MUST** fill out the other
+
+**<mc_name>** 
+
+**<discord_name>**
+""",
+        "pop": f"""`/pop`
+
+Repopulates the shop channel this command is ran in with new or updated embeds.
+
+This command takes in no parameters.
+
+**Usable by Shop Check Admins only.**
+""",
+        "closeshop": f"""`/close_shop <channel>`
+
+Closes a reclaimed shop, deletes the channel, and saves a transcript. The shop is the one where this command was ran in.
+Will not work if the shop is not marked as Reclaimed.
+
+This command takes in no parameters.
+
+**Usable by Shop Check Admins only.**
+""",
+        "moveshop": f"""`/move_shop <channel> <district_number>`
+
+Moves a shop to a different District.
+
+**<channel>** : Select the Shop channel you wish to move.
+
+**<district_number>** : Enter the district number you want to move the shop to.
+
+**Usable by Shop Check Admins only.**
+""",
+        "report": f"""`/report
+
+Generates a report of all the shops that haven't been checked this week.
+Will not run if it thinks it is in actual Shop Channel.
+
+This command takes in no parameters.
+
+**Usable by Shop Check Admins only.**
+""",
+        "generate_guides": f"""`/generate_guides
+
+Generates and sends the Guide Embeds in the channel this was ran in. Will NOT delete old guide messages.
+DO NOT USE UNLESS ACTUALLY UPDATING THE GUIDE.
+
+This command takes in no parameters.
+
+**Usable by Shop Check Admins only.**
+"""
+    }
 
 class DatabaseHandler:
     def __init__(self,url:str,database_name:str,username:str,password:str,port:int):
@@ -801,7 +1043,7 @@ async def store_image(guild,attachment:discord.Attachment):
 async def notify_district(district_number:int,msg:str,channel_list) -> bool:
     """
     Sends the desired message to a district's comments channel.
-    Will @ the role as well (if defined).
+    Add '<DISTRICT_ROLE>' to the message to place in a ping.
 
     :param district_number:
     :param msg:
@@ -1061,8 +1303,14 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
     debug(f'{shop_info}')
     return True
 
-async def is_shop_channel(channel):
-    # TODO: Does this need to be an async function?
+def is_shop_channel(channel) -> bool:
+    """
+    Determines if a channel is a shop's channel or not.
+
+    :param channel:
+    :return:
+    """
+
     if type(channel) != discord.TextChannel:
         return False
 
@@ -1171,8 +1419,7 @@ async def on_message(msg):
         debug("No Category found")
         return
 
-
-
+    # Start of Shop Creation process
     if msg.channel.category_id == variables['ticket_category_id'] and ticket_regex.match(msg.channel.name):
 
         # List of process keys, so I didn't have to do this every line
@@ -1216,6 +1463,23 @@ async def on_message(msg):
             if re.compile(shop_ticket_process[k]['message_regex']).fullmatch(last_bot_message):
                 expected_response = [shop_ticket_process[k]['response_type'],shop_ticket_process[k]['response_regex']]
 
+                debug(f"shop_ticket_process[k]: {shop_ticket_process[k]}")
+
+                # Check if expected response has a min and max numbers set
+                if shop_ticket_process[k]['response_regex'] == r"NUMBER":
+                    try:
+                        expected_response.append(shop_ticket_process[k]['min_number'])
+                    except KeyError:
+                        expected_response.append(None) # 2 is min
+
+                    try:
+                        expected_response.append(shop_ticket_process[k]['max_number'])
+                    except KeyError:
+                        expected_response.append(None) # 3 is max
+                else:
+                    expected_response.append(None) # 2
+                    expected_response.append(None) # 3
+
                 # The index of the next step in the process
                 next_step = shop_ticket_process_keys.index(k) + 1
 
@@ -1228,6 +1492,23 @@ async def on_message(msg):
                 debug(f"Sub ticket process key: {k}")
                 if re.compile(sub_ticket_process[k]['message_regex']).fullmatch(last_bot_message):
                     expected_response = [sub_ticket_process[k]['response_type'],sub_ticket_process[k]['response_regex']]
+
+                    # Check if expected response has a min and max numbers set
+                    if sub_ticket_process[k]['response_type'] == r"NUMBER":
+                        try:
+                            expected_response.append(sub_ticket_process[k]['min_number'])
+                        except KeyError:
+                            expected_response.append(None)  # 2 is min
+
+                        try:
+                            expected_response.append(sub_ticket_process[k]['max_number'])
+                        except KeyError:
+                            expected_response.append(None)  # 3 is max
+                    else:
+                        expected_response.append(None)  # 2
+                        expected_response.append(None)  # 3
+
+
                     sub_ticket = True
                     sub_ticket_index = sub_ticket_process_keys.index(k)
                     debug(f"Sub ticket message regex found")
@@ -1255,7 +1536,24 @@ async def on_message(msg):
                 accepted_response = True
 
             elif expected_response[1] == r"NUMBER" and msg.content.isdigit():
-                accepted_response = True
+
+                min_pass = True
+                max_pass = True
+
+                debug(f"{expected_response[2]} >= {int(msg.content)} <= {expected_response[3]}")
+
+                if expected_response[2] is not None: # MINIMUM Number check
+                    if int(msg.content) < expected_response[2]:
+                        debug("Number failed Minimum check")
+                        min_pass = False
+
+                if expected_response[3] is not None: # MAXIMUM Number check
+                    if int(msg.content) > expected_response[3]:
+                        debug("Number failed Maximum check")
+                        max_pass = False
+
+                if min_pass and max_pass:
+                    accepted_response = True
 
             elif re.compile(expected_response[1], re.IGNORECASE).fullmatch(msg.content):
                 accepted_response = True
@@ -1317,7 +1615,7 @@ async def on_message(msg):
                 # '✅','🇾','🇳','❌',':white_check_mark:',':regional_indicator_y:',':regional_indicator_n:',':x:'
 
         # If last step, finish creating the shop
-        elif next_step == len(shop_ticket_process_keys):
+        elif accepted_response and next_step == len(shop_ticket_process_keys):
             debug("Creating new shop - message")
 
             success = await create_shop_channel(msg.channel)
@@ -1333,7 +1631,7 @@ async def on_message(msg):
                 logger.log(f"Failed to create shop channel: {msg.channel}","[ERROR] ")
 
         # If it is not an accepted response, delete the message.
-        elif not accepted_response:
+        else:
             await msg.delete()
 
 # Event triggered when a reaction has been added. Handles Shop Creation and Shop Check
@@ -1916,17 +2214,43 @@ async def pop(ctx):
 # !mb help
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Displays a list of commands.")
 @discord.ext.commands.has_role(variables['shop_staff_id'])
-async def help(ctx):
-    # TODO: Finish
-    pass
+async def help(ctx,command: discord.Option(str,description="Command you want more info on.",required=False,default=None)):
+    """
+    Sends a list of commands.
+
+    If command is not none, it will try and send a manual for one if available.
+
+    :param ctx:
+    :param command:
+    :return:
+    """
+    if command is not None:
+
+        sanitized_command = SanitizeString(command,bannedCharacters=["/","_"," "])
+
+        debug(f"command: {command}\nsanitized_command: {sanitized_command}")
+
+        if sanitized_command in command_manuals:
+            await ctx.respond(command_manuals[sanitized_command],ephemeral=True)
+            return
+        else:
+            await ctx.respond(f"Help for `{command}` not found.", ephemeral=True)
+            return
+
+    for e in help_template:
+
+        new_embed = discord.Embed().from_dict(e)
+
+        await ctx.respond(embeds=[new_embed],ephemeral=True)
 
 # !mb claim
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Claims a shop for you.")
 @discord.ext.commands.has_role(variables['shop_staff_id'])
 async def claim(ctx,channel: discord.Option(discord.TextChannel, description="")):
+    debug(f"CTX Type: {type(ctx)}")
     debug(f"{ctx.author} trying to claim {channel}")
 
-    if not await is_shop_channel(channel):
+    if not is_shop_channel(channel):
         await ctx.respond("Invalid Channel", ephemeral=True)
         return
 
@@ -1934,10 +2258,15 @@ async def claim(ctx,channel: discord.Option(discord.TextChannel, description="")
         new_name = channel.name.replace(f"{channel.name[0]}",emoji_dict[f"{ctx.author.id}"])
     except KeyError:
         logger.log(f"Emoji for {ctx.author.id} was not found.","[ERROR] ")
-        await ctx.respond("Couldn't find emoji.")
+        await ctx.respond("Couldn't find emoji.", ephemeral=True)
+        return
 
     await channel.edit(name=new_name)
-    await ctx.respond(f"Claimed <#{channel.id}>")
+
+    if not is_shop_channel(ctx.channel):
+        await ctx.respond(f"Claimed <#{channel.id}>")
+    else:
+        await ctx.respond(f"Claimed <#{channel.id}>",ephemeral=True)
 
 # !mb closeshop
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Closes a shop that has been marked for reclaim. Shop Admins only.")
@@ -1947,7 +2276,7 @@ async def close_shop(ctx):
 
     channel = ctx.channel
 
-    if not await is_shop_channel(channel):
+    if not is_shop_channel(channel):
         await ctx.respond("Invalid Channel", ephemeral=True)
         return
 
@@ -2010,7 +2339,7 @@ async def update_image(ctx, channel:discord.Option(discord.TextChannel,descripti
 
     # TODO: Check to make sure this is an image filetype
 
-    if not await is_shop_channel(channel):
+    if not is_shop_channel(channel):
         await ctx.respond("Invalid Channel", ephemeral=True)
         return
 
@@ -2050,7 +2379,7 @@ async def update_image(ctx, channel:discord.Option(discord.TextChannel,descripti
 # New command to update information about a shop
 # !mb change shopname, coords, largeshop, serviceshop
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Updates information about a shop.")
-@discord.ext.commands.has_role(variables['shop_staff_id'])
+@discord.ext.commands.has_role(variables['shop_staff_id'])# @discord.ext.commands.check(not is_shop_channel)
 async def update_shop(ctx, channel: discord.Option(discord.TextChannel,description="Shop's channel"),
                       shop_name: discord.Option(str,description="Name to change to",required=False,default=None),
                       coords: discord.Option(str,description="Coords to change to",required=False,default=None),
@@ -2079,11 +2408,12 @@ async def update_shop(ctx, channel: discord.Option(discord.TextChannel,descripti
         return
 
 
-    await ctx.respond("Updating shop info...")
+    await ctx.respond("Updating shop info...", ephemeral=True)
 
     shop_message_history = await get_shop_channel_history(channel)
 
     if shop_message_history is False:
+        logger.log(f"update_shop: Unable to find bot messages in {channel.name} | {channel.id}","[ERROR] ")
         await ctx.respond("Can't find messages", ephemeral=True)
         return
 
@@ -2152,11 +2482,15 @@ async def update_shop(ctx, channel: discord.Option(discord.TextChannel,descripti
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Moves a shop to a different District.")
 @discord.ext.commands.has_role(variables['shop_admin_id'])
 async def move_shop(ctx, channel: discord.Option(discord.TextChannel,description="Shop's channel"), district_number: discord.Option(int, description="District Number")):
-    if not await is_shop_channel(channel):
+    if not is_shop_channel(channel):
         await ctx.respond("Not a valid Channel.",ephemeral=True)
         return
 
-    await ctx.respond(f"Attempting to move <#{channel.id}> to District {district_number}.")
+    if is_shop_channel(ctx.channel):
+        await ctx.respond("Please don't use this command in a shop channel...", ephemeral=True)
+        return
+
+    # await ctx.respond(f"Moving <#{channel.id}> to District {district_number}.")
 
     # Get all category channels
     channels = await primary_guild.fetch_channels()
@@ -2193,12 +2527,12 @@ async def move_shop(ctx, channel: discord.Option(discord.TextChannel,description
             return
 
     # If none found after loop finishes then respond saying as much
-    await ctx.respond("Unable to find District.")
+    await ctx.respond("Unable to find District.",ephemeral=True)
 
 # !mb update owner
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Updates the owners of a shop.")
 @discord.ext.commands.has_role(variables['shop_staff_id'])
-async def update_owner(ctx, shop: discord.Option(discord.TextChannel,description="Shop's channel",required=True),
+async def update_owner(ctx, channel: discord.Option(discord.TextChannel,description="Shop's channel",required=True),
                        owner_number: discord.Option(int,description="Owner Number. (1, 2, 3, 4, 5.. 20",required=True),
                        mc_name: discord.Option(str,description="Minecraft Username. Leave blank to remove owner.",default="",required=False),
                        discord_name: discord.Option(str,description="Discord name OR ID",default="",required=False)):
@@ -2213,9 +2547,14 @@ async def update_owner(ctx, shop: discord.Option(discord.TextChannel,description
     #discord_owners = database.query(f"SELECT discord_owners FROM shops WHERE shop_channel_id = \"{shop.id}\"")[0][0]
     #is_service_shop = database.query(f"SELECT service_shop FROM shops WHERE shop_channel_id = \"{shop.id}\"")[0][0]
 
-    results = database.query(f"SELECT mc_owners, discord_owners, service_shop FROM shops WHERE shop_channel_id = \"{shop.id}\"")
+    results = database.query(f"SELECT mc_owners, discord_owners, service_shop FROM shops WHERE shop_channel_id = \"{channel.id}\"")
     if len(results) == 0:
         await ctx.respond("Invalid shop.", ephemeral=True)
+        return
+
+    # Check to make sure both variables are filled if one is filled. Otherwise don't worry about it.
+    if (len(mc_name) > 0 and len(discord_name) < 1) or (len(discord_name) > 0 and len(mc_name) < 1):
+        await ctx.respond("Please fill out both `mc_name` and `discord_name`.", ephemeral=True)
         return
 
     mc_owners = results[0][0]
@@ -2245,15 +2584,6 @@ async def update_owner(ctx, shop: discord.Option(discord.TextChannel,description
     else:
         owner_number -= 1
 
-    #if owner_number <= 1:
-    #    owner_number = 0
-    #elif owner_number > 20:
-    #    owner_number = 19
-    #elif owner_number > len(mc_owners):
-    #    owner_number = len(mc_owners) - 1
-    #else:
-    #    owner_number -= 1
-
     # Basically checks to see if we're adding, removing, or just updating using some small checks.
     if owner_number < len(mc_owners) or (mc_name == "" and owner_number < len(mc_owners)): # I know this looks redundant, but it's needed trust me bro
         mc_owners.pop(owner_number)
@@ -2266,9 +2596,9 @@ async def update_owner(ctx, shop: discord.Option(discord.TextChannel,description
         mc_owners.insert(owner_number, mc_name)
         discord_owners.insert(owner_number, discord_name)
 
-    await ctx.respond(f"Updating owner #{owner_number + 1} for <#{shop.id}>...", ephemeral=True)
+    await ctx.respond(f"Updating owner #{owner_number + 1} for <#{channel.id}>...", ephemeral=True)
 
-    shop_message_history = await get_shop_channel_history(shop)
+    shop_message_history = await get_shop_channel_history(channel)
 
     if shop_message_history is False:
         await ctx.respond("Can't find messages", ephemeral=True)
@@ -2303,17 +2633,17 @@ async def update_owner(ctx, shop: discord.Option(discord.TextChannel,description
             database_mc_owner_text += "|"
             database_discord_owner_text += "|"
 
-    logger.log(f"Updating {shop.name}'s owner #{owner_number} to '{mc_name} (`{discord_name}`')",tag="[INFO] ")
+    logger.log(f"Updating {channel.name}'s owner #{owner_number + 1} to '{mc_name} (`{discord_name}`')",tag="[INFO] ")
 
-    database.query(f"UPDATE shops SET mc_owners = \"{database_mc_owner_text}\" WHERE shop_channel_id = {shop.id};")
-    database.query(f"UPDATE shops SET discord_owners = \"{database_discord_owner_text}\" WHERE shop_channel_id = {shop.id};")
+    database.query(f"UPDATE shops SET mc_owners = \"{database_mc_owner_text}\" WHERE shop_channel_id = {channel.id};")
+    database.query(f"UPDATE shops SET discord_owners = \"{database_discord_owner_text}\" WHERE shop_channel_id = {channel.id};")
 
     old_embed = shop_message_history[0].embeds[0]
     old_embed.set_field_at(0,name="Owners:",value=owners_text,inline=False)
 
     await shop_message_history[0].edit(embeds=[old_embed])
 
-    old_embed = update_shop_check_command_embed(shop_message_history[3].embeds[0], shop_channel_id=shop.id, is_service_shop=bool(int(is_service_shop)))
+    old_embed = update_shop_check_command_embed(shop_message_history[3].embeds[0], shop_channel_id=channel.id, is_service_shop=bool(int(is_service_shop)))
     await shop_message_history[3].edit(embeds=[old_embed])
 
 # !mb report
@@ -2321,6 +2651,10 @@ async def update_owner(ctx, shop: discord.Option(discord.TextChannel,description
 @discord.ext.commands.has_role(variables['shop_admin_id'])
 async def report(ctx):
     # TODO: Finish
+
+    if is_shop_channel(ctx.channel):
+        await ctx.respond("Please don't use this command in a shop channel...",ephemeral=True)
+        return
 
     await ctx.respond("Generating, please wait...")
 
@@ -2402,6 +2736,11 @@ async def report(ctx):
 @discord.ext.commands.has_role(variables['shop_staff_id'])
 async def search(ctx, search_term: discord.Option(str,description="Shop Name, Owner, or a Keyword. Case sensitive.",required=True)):
     # TODO: Finish
+
+    if is_shop_channel(ctx.channel):
+        await ctx.respond("Please don't use this command in a shop channel...",ephemeral=True)
+        return
+
     results = database.query(
         f"SELECT shop_channel_id FROM shops WHERE (shop_name LIKE '%{search_term}%' OR mc_owners LIKE '%{search_term}%' OR discord_owners LIKE '%{search_term}%') AND shop_status = 'Open';")
 
@@ -2720,6 +3059,30 @@ async def assign_role_to_district(ctx, role: discord.Option(discord.Role, descri
     saveJsonToFile(district_role_mappings_file,district_role_mappings)
     await ctx.respond("Role mapped.",ephemeral=True)
     logger.log(f"Assigned Role ID {role.id} to District {district_number}", tag="[INFO] ")
+
+@bot.slash_command(guild_ids=[variables['guild_id']],description="Generates and sends guides in the channel this is ran in.")
+@discord.ext.commands.has_role(variables['shop_admin_id'])
+async def generate_guides(ctx):
+    """
+    Generates embeds based on data in guides_template.
+    Will then send embeds in the channel this is called from (providing it isn't a shop channel).
+
+    :param ctx:
+    :return:
+    """
+
+    if is_shop_channel(ctx.channel):
+        await ctx.respond("Please don't use this command in a shop channel...",ephemeral=True)
+        return
+
+    await ctx.respond("Generating guides, stand back!", ephemeral=True)
+
+    for e in guides_template:
+
+        new_embed = discord.Embed().from_dict(e)
+
+        await ctx.channel.send(embeds=[new_embed])
+
 
 # Cogs go here (if any)
 
