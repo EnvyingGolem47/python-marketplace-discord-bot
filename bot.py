@@ -2765,13 +2765,37 @@ async def import_from_sql(ctx):
     """
     Reads all data from the SQL Database and creates all shops in the database.
     Basically here to transfer from old marketplace bot to this one.
+
     :param ctx:
     :return:
     """
+
     # TODO: Finish
     # TODO: Fix NONE owner being listed for some reason
     await ctx.respond("Importing from SQL Database... This **WILL** take a while. (Will respond when done)")
     logger.log("Importing from SQL Database... This will take a while.", "[INFO] ")
+
+
+    # Reformats the timestamp in the SQL Database
+    logger.log("Reformatting shop checks...", tag="[INFO] ")
+    result = database.query("SELECT * FROM shop_checks;")
+    count = 0
+    for sc in result:
+        if sc[3] is None:
+            continue
+        try:
+            new_datetime = datetime.datetime.strptime(sc[3].strip(), "%m-%d-%Y %I:%M %p")
+        except ValueError:
+            continue
+
+        database.query(f"UPDATE shop_checks SET date_and_time = \"{str(new_datetime).split('.')[0]}\" WHERE shop_check_id = {sc[0]};")
+        count += 1
+
+        debug(count)
+
+    logger.log(f"Reformatted {count} shop check entries.", tag="[INFO] ")
+    logger.log(f"Importing Shops...", tag="[INFO] ")
+
 
     result = database.query("SELECT * FROM shops WHERE shop_status = \"Open\" and shop_init = 1;")
     #   0    1                2     3       4            5               6            7               8            9               10         11          12            13               14        15           16            17            18             19              20
@@ -2788,11 +2812,11 @@ async def import_from_sql(ctx):
         temp_owners_discord.append(s[5])
 
         # It really is hit or miss at this point
-        if s[6] is not None and s[6] != "None":
+        if f"{s[6]}" != "None":
             temp_owners.append(s[6])
             temp_owners_discord.append(s[7])
 
-        if s[8] is not None and s[6] != "None":
+        if f"{s[8]}" != "None":
             temp_owners.append(s[8])
             temp_owners_discord.append(s[9])
 
@@ -2824,31 +2848,11 @@ async def import_from_sql(ctx):
         # To help prevent getting rate limited
         time.sleep(1)
 
-    # Reformats the timestamp in the SQL Database
-    logger.log("Reformatting shop checks...", tag="[INFO] ")
-    result = database.query("SELECT * FROM shop_checks;")
-    count = 0
-    for sc in result:
-        if sc[3] is None:
-            continue
-        try:
-            new_datetime = datetime.datetime.strptime(sc[3].strip(), "%m-%d-%Y %I:%M %p")
-        except ValueError:
-            continue
-
-        database.query(f"UPDATE shop_checks SET date_and_time = \"{str(new_datetime).split('.')[0]}\" WHERE shop_check_id = {sc[0]};")
-        count += 1
-
-        debug(count)
-
-    logger.log(f"Reformatted {count} shop check entries.", tag="[INFO] ")
-
-
     logger.log("SQL Import & Reformat completed.","[INFO] ")
     await ctx.respond("SQL Import & Reformat completed.\n<@142471642440794112> now delete this command :)")
 
-@bot.slash_command(guild_ids=[variables['guild_id']],description="DO NOT USE Reformats datetimes in shop checks to new format.")
-@discord.ext.commands.has_role(variables['shop_admin_id'])
+# @bot.slash_command(guild_ids=[variables['guild_id']],description="DO NOT USE Reformats datetimes in shop checks to new format.")
+# @discord.ext.commands.has_role(variables['shop_admin_id'])
 async def reformat_shop_checks_sql(ctx):
     """
     The point of reformatting this is to not have to format the datetime format everytime we want to use it between MySQL and Python.
@@ -2880,7 +2884,6 @@ async def reformat_shop_checks_sql(ctx):
     logger.log(f"Reformatted {count} shop check entries.", tag="[INFO] ")
     await ctx.respond("Done.")
 
-# New command to load and create missing shops from SQL database
 # @bot.slash_command(guild_ids=[variables['guild_id']],description="DO NOT USE Reformats all entered SQL data")
 # @discord.ext.commands.has_role(variables['shop_admin_id'])
 async def reformat(ctx):
@@ -3028,6 +3031,17 @@ async def test(ctx):
 
     await ctx.channel.send(embeds=new_list_two)
 
+@bot.slash_command(guild_ids=[variables['guild_id']],description="DO NOT USE Deletes ALL Shop channels.")
+@discord.ext.commands.has_role(variables['shop_admin_id'])
+async def delete_all_shops(ctx):
+    await ctx.respond("Burning it down")
+    guild_channels = await primary_guild.fetch_channels()
+
+    for channel in guild_channels:
+        if is_shop_channel(channel):
+            await channel.delete()
+
+    await ctx.respond("Done")
 # ========================================================================================[DEV COMMANDS]============================================================================================
 
 # New command to create a shop, but without going through the process in a channel.
