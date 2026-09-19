@@ -3,9 +3,7 @@
 #
 # Python Marketplace Discord Bot - Built for Project Nebula
 #
-# Updated: 9/18/2026 - EnvyingGolem47
-#
-# Please no judgment on how poorly my code looks :)
+# Updated: 9/19/2026 - EnvyingGolem47
 
 import datetime
 import time
@@ -24,15 +22,17 @@ import mysql.connector
 import paramiko
 
 data_folder = "data/"
-memory_folder = "system/memory/"
-logs_folder = "data/logs/"
-# The system folder should already be there, as the files in it are not meant to be deleted, modified, or moved by the user
-variables_file = "data/.variables.json"
-district_role_mappings_file = f"{memory_folder}district_role_mappings.json"
-sql_template_file = f"system/sql_template.sql"
+variables_file = f"{data_folder}.variables.json"
+logs_folder = f"{data_folder}logs/"
 
 # Designed to just accept baguette bot's baguette_config.json file
-emoji_to_staff_member_file = "data/baguette_config.json"
+emoji_to_staff_member_file = f"{data_folder}baguette_config.json"
+
+# The system folder should already be there, as the files in it are not meant to be deleted, modified, or moved by the user
+memory_folder = "system/memory/"
+sql_template_file = f"system/sql_template.sql"
+district_role_mappings_file = f"{memory_folder}district_role_mappings.json"
+
 
 logger = Logger(logs_folder)
 
@@ -55,27 +55,6 @@ debug_mode = False
 #  I made it this way to help maintain reliability within a shop creation ticket. Even if the bot goes offline or breaks, it can be easily recovered, without starting over.
 #  If the bot doesn't respond/is offline when you send a message, delete your message and try again. (same thing with reactions)
 #  This was one of the first things I worked on, cause I really want the shop creation process to be recoverable from any point during it.
-#
-# MESSAGE - Expects a message response
-# REACTION_YES_OR_NO - Expects a reaction of either Yes or No emojis
-# REACTION_CHECKMARK - Expects a reaction of a :white_check_mark: emoji
-# NONE - Expects nothing
-# IMAGE - Expects Image
-
-# <USER> - replaced with the user that created the ticket - NOTE: Don't actually use this one
-# <LAST_MESSAGE> - replaced with the last message the user sent
-
-# response_type is the type of response expected (see above list) ^
-# message_regex (The second item in the list) is the regex that matches the question.
-# response_regex is the regex that the answer is expected to match
-#   ( ANY bypasses the check )
-#   ( TEXT will enforce the msg has at least 1 character in the name )
-#   ( NUMBER will use .isdigit instead )
-# yes_response (for REACTION_YES_OR_NO & REACTION_CHECKMARK) determines the sub process triggered for a YES ( NORMAL proceeds with main ticket process )
-# no_response (for REACTION_YES_OR_NO) determines the sub process triggered for a NO ( NORMAL proceeds with main ticket process )
-# max_number (for NUMBER) maximum number value that can be used
-# min_number (for NUMBER) minimum number value that can be used
-# stored_variable is the variable the response will be stored in
 shop_ticket_process = \
     {
         "Hi, <USER>! Let's create a shop! What is your shop's name?":
@@ -701,42 +680,6 @@ def check_directories():
             input("Press enter to close:")
             raise KeyboardInterrupt
 
-def get_next_check_deadline(checked_date=None):
-    """
-    Returns the next deadline to check shops.
-
-    :return datetime. int | bool:
-    """
-
-    # TODO: Change to determine if it's a Friday, Saturday, or Sunday, and then skip to next Sunday. (maybe difference in weekday # + 7?)
-    # Monday  Tuesday  Wednesday  Thursday  Friday  Saturday  Sunday
-    # 0       1        2          3         4       5         6
-
-    if checked_date is None:
-        current_datetime = datetime.datetime.now()
-    else:
-        current_datetime = checked_date
-
-    new_datetime = datetime.datetime(year=current_datetime.year,month=current_datetime.month,day=current_datetime.day,hour=17)
-
-    if 6 > current_datetime.weekday() >= 4:
-        new_datetime = new_datetime + datetime.timedelta(days=7 + 6-current_datetime.weekday())
-    elif current_datetime.weekday() == 6:
-        new_datetime = new_datetime + datetime.timedelta(days=7)
-    else:
-        new_datetime = new_datetime + datetime.timedelta(days=6 - current_datetime.weekday())
-
-    return int(new_datetime.timestamp())
-
-def get_current_discord_timecode():
-    """
-    Returns the current time in a discord appropriate timecode.
-
-    :return int:
-    """
-    current_datetime = datetime.datetime.now()
-    return int(current_datetime.timestamp())
-
 def get_variables() -> dict:
     """
     Retrieves the data in variables.json, or if it doesn't exist, create and fill in a new one.
@@ -853,6 +796,41 @@ message_cache = {}
 shop_id_cache = {}
 
 # ======================== NORMAL FUNCTIONS ========================
+def get_next_check_deadline(checked_date=None):
+    """
+    Returns the next deadline to check shops.
+
+    :return datetime. int | bool:
+    """
+
+    # TODO: Change to determine if it's a Friday, Saturday, or Sunday, and then skip to next Sunday. (maybe difference in weekday # + 7?)
+    # Monday  Tuesday  Wednesday  Thursday  Friday  Saturday  Sunday
+    # 0       1        2          3         4       5         6
+
+    if checked_date is None:
+        current_datetime = datetime.datetime.now()
+    else:
+        current_datetime = checked_date
+
+    new_datetime = datetime.datetime(year=current_datetime.year,month=current_datetime.month,day=current_datetime.day,hour=17)
+
+    if 6 > current_datetime.weekday() >= 4:
+        new_datetime = new_datetime + datetime.timedelta(days=7 + 6-current_datetime.weekday())
+    elif current_datetime.weekday() == 6:
+        new_datetime = new_datetime + datetime.timedelta(days=7)
+    else:
+        new_datetime = new_datetime + datetime.timedelta(days=6 - current_datetime.weekday())
+
+    return int(new_datetime.timestamp())
+
+def get_current_discord_timecode():
+    """
+    Returns the current time in a discord appropriate timecode.
+
+    :return int:
+    """
+    current_datetime = datetime.datetime.now()
+    return int(current_datetime.timestamp())
 
 def get_district_number(category_name:str) -> int:
     """
@@ -1004,14 +982,14 @@ def update_shop_check_command_embed(old_embed:discord.Embed, shop_channel_id:int
         if len(owner) + 46 >= 1024:
             break
 
-        if i != 0 and len(owners) -1 != i:
-            shop_check_command_string += '\n'
-
         if not is_service_shop:
             shop_check_command_string += f"```/co l time:2w action:container radius:10 user:{owner}```" # 46 + owner
 
         else:
             shop_check_command_string += f"```/co l time:4w action:+session user:{owner}```"
+
+        if len(owners) - 1 != i:
+            shop_check_command_string += '\n'
 
     old_embed.add_field(name="Copy: ", value=shop_check_command_string, inline=False)
 
@@ -1731,6 +1709,7 @@ async def on_raw_reaction_add(reaction_data):
     if reaction_user is None:
         debug(f"Reaction User not found")
         return
+
     if reaction_user == bot.user:
         debug(f"Is Bot reaction")
         return
@@ -1946,173 +1925,183 @@ async def on_raw_reaction_add(reaction_data):
 
         debug(f"Owners in fields[0].name? {"Owners:" in msg.embeds[0].fields[0].name}")
 
-        # IF CHECKMARK
-        if react_emoji == "✅" and "Owners:" in msg.embeds[0].fields[0].name:
+        # ✅ ⚠️ ❌ Buttons
+        if "Owners:" in msg.embeds[0].fields[0].name:
 
-            new_embed = shop_message_history[2].embeds[0]
+            # IF CHECKMARK
+            if react_emoji == "✅":
 
-            new_embed.set_field_at(0,name="Status:",value="✅ OK",inline=False)
-            new_embed.set_field_at(1, name="Next Check Due:", value=f"<t:{get_next_check_deadline()}:f>", inline=False)
-            new_embed.set_field_at(2, name="Last checked by:", value=f"<@{reaction_user.id}> on <t:{get_current_discord_timecode()}:f>", inline=False)
+                new_embed = shop_message_history[2].embeds[0]
 
-            if len(new_embed.fields) > 3:
-                new_embed.remove_field(3)
-
-            await shop_message_history[2].edit(embeds=[new_embed])
-
-            await shop_message_history[2].clear_reactions()
-
-            await log_shop_check_activity(shop_message_history[0],channel.id,reaction_user.id,"✅ OK")
-
-
-        # IF WARNING
-        if react_emoji == "⚠️" and "Owners:" in msg.embeds[0].fields[0].name:
-
-            new_embed = shop_message_history[2].embeds[0]
-
-            if new_embed.fields[0].value == "⚠️ Warning / Owner Contacted":
+                new_embed.set_field_at(0,name="Status:",value="✅ OK",inline=False)
                 new_embed.set_field_at(1, name="Next Check Due:", value=f"<t:{get_next_check_deadline()}:f>", inline=False)
                 new_embed.set_field_at(2, name="Last checked by:", value=f"<@{reaction_user.id}> on <t:{get_current_discord_timecode()}:f>", inline=False)
-
-                await shop_message_history[2].edit(embeds=[new_embed])
-
-            else:
-                new_embed.set_field_at(0,name="Status:",value="⚠️ Warning",inline=False)
-                new_embed.set_field_at(1, name="Next Check Due:", value=f"<t:{get_next_check_deadline()}:f>", inline=False)
-                new_embed.set_field_at(2, name="Last checked by:", value=f"<@{reaction_user.id}> on <t:{get_current_discord_timecode()}:f>", inline=False)
-
-
-                raw_owners_text = shop_message_history[0].embeds[0].fields[0].value
-                owners_list = raw_owners_text.split("\n")
-                primary_owner_mc = owners_list[0].split(" (")[0]
-                primary_owner_discord = owners_list[0].split(" (")[1].replace(")","")
-
-                shop_name = shop_message_history[0].embeds[0].title.split(" (")[0]
-
-
-                to_do_text = \
-                    f"""
-- Contact {primary_owner_mc} ({primary_owner_discord}). You may copy/paste the message below.
-  - Create a thread in this channel and post your evidence (screenshot of contact) in that thread.
-    - React ✉️ to this message to confirm the owner has been contacted.
-                    """
 
                 if len(new_embed.fields) > 3:
                     new_embed.remove_field(3)
 
-                new_embed.add_field(name="To do:",value=to_do_text)
+                await shop_message_history[2].edit(embeds=[new_embed])
 
-                message_to_send_text = \
-                    f"""
-    ```Hi {primary_owner_mc}! It appears your shop, {shop_name}, has been inactive for 2 weeks. We require shop owners to be active to reduce the number of empty or neglected shops in our marketplace. For a shop to be considered inactive, the following must be true:
-    
-    • The owner has not interacted with items in any of the chests in the shop for 4 weeks.
-    • The shop has not been added to a marketplace directory within 4 weeks of being built.
-    
-    And ONE of the following: 
-    
-    • There have been unclaimed diamonds in the shop for 4 weeks.
-    OR
-    • There has been no stock, or not enough stock to fulfill the quantity for the price that was set, for 4 weeks.
-    
-    The purpose of this message is to kindly remind you to restock your shop and/or pick up your unclaimed payments! If you do not do so within 2 weeks **your shop will be reclaimed and put up for auction.**`
-    
-    Please message me when you do so. If you have any questions, feel free to ask! Thanks!```
+                await log_shop_check_activity(shop_message_history[0],channel.id,reaction_user.id,"✅ OK")
+
+                if len(shop_message_history[2].reactions) >= 1:
+                    await shop_message_history[2].clear_reactions()
+
+            # IF WARNING
+            elif react_emoji == "⚠️":
+
+                new_embed = shop_message_history[2].embeds[0]
+
+                if new_embed.fields[0].value == "⚠️ Warning / Owner Contacted":
+                    new_embed.set_field_at(1, name="Next Check Due:", value=f"<t:{get_next_check_deadline()}:f>", inline=False)
+                    new_embed.set_field_at(2, name="Last checked by:", value=f"<@{reaction_user.id}> on <t:{get_current_discord_timecode()}:f>", inline=False)
+
+                    await shop_message_history[2].edit(embeds=[new_embed])
+
+                else:
+                    new_embed.set_field_at(0,name="Status:",value="⚠️ Warning",inline=False)
+                    new_embed.set_field_at(1, name="Next Check Due:", value=f"<t:{get_next_check_deadline()}:f>", inline=False)
+                    new_embed.set_field_at(2, name="Last checked by:", value=f"<@{reaction_user.id}> on <t:{get_current_discord_timecode()}:f>", inline=False)
+
+
+                    raw_owners_text = shop_message_history[0].embeds[0].fields[0].value
+                    owners_list = raw_owners_text.split("\n")
+                    primary_owner_mc = owners_list[0].split(" (")[0]
+                    primary_owner_discord = owners_list[0].split(" (")[1].replace(")","")
+
+                    shop_name = shop_message_history[0].embeds[0].title.split(" (")[0]
+
+
+                    to_do_text = \
+                        f"""
+    - Contact {primary_owner_mc} ({primary_owner_discord}). You may copy/paste the message below.
+      - Create a thread in this channel and post your evidence (screenshot of contact) in that thread.
+        - React ✉️ to this message to confirm the owner has been contacted.
+                        """
+
+                    if len(new_embed.fields) > 3:
+                        new_embed.remove_field(3)
+
+                    new_embed.add_field(name="To do:",value=to_do_text)
+
+                    message_to_send_text = \
+                        f"""
+        ```Hi {primary_owner_mc}! It appears your shop, {shop_name}, has been inactive for 2 weeks. We require shop owners to be active to reduce the number of empty or neglected shops in our marketplace. For a shop to be considered inactive, the following must be true:
+        
+        • The owner has not interacted with items in any of the chests in the shop for 4 weeks.
+        • The shop has not been added to a marketplace directory within 4 weeks of being built.
+        
+        And ONE of the following: 
+        
+        • There have been unclaimed diamonds in the shop for 4 weeks.
+        OR
+        • There has been no stock, or not enough stock to fulfill the quantity for the price that was set, for 4 weeks.
+        
+        The purpose of this message is to kindly remind you to restock your shop and/or pick up your unclaimed payments! If you do not do so within 2 weeks **your shop will be reclaimed and put up for auction.**`
+        
+        Please message me when you do so. If you have any questions, feel free to ask! Thanks!```
+                        """
+
+
+                    message_to_send_embed = discord.Embed(color=10181046,title=f"Owner Contact Message - {primary_owner_discord}",description=message_to_send_text)
+
+
+                    await shop_message_history[2].edit(embeds=[new_embed,message_to_send_embed])
+                    await shop_message_history[2].add_reaction("✉️")
+
+                await log_shop_check_activity(shop_message_history[0], channel.id, reaction_user.id, "⚠️ Warning")
+
+            # IF RED X
+            elif react_emoji == "❌":
+                to_do_text = \
                     """
+    *This shop will not close until all steps are completed!*
+    
+    - Message the shop owner. You may copy and paste the message below. React 1️⃣ when complete.
+      - Send a screenshot of your communication with the owner in the district comments channel. React 2️⃣ when complete.
+        - Collect all materials, chests, armor stands, heads, signs, and banners from the shop. Store the items in the Staff HQ at 332, 64 on the nether roof. React 3️⃣ when complete.
+          - Remove the shop in the GUI Marketplace directory & `@Shop Check Admin` to notify them. React 4️⃣ when this step is complete. ```/guimd moderate review```
+    """
 
+                if len(shop_message_history[2].reactions) >= 1:
+                    await shop_message_history[2].clear_reactions()
 
-                message_to_send_embed = discord.Embed(color=10181046,title=f"Owner Contact Message - {primary_owner_discord}",description=message_to_send_text)
+                new_embed = shop_message_history[2].embeds[0]
 
+                new_embed.set_field_at(0,name="Status:",value="❌ Reclaim",inline=False)
+                new_embed.set_field_at(1, name="Next Check Due:", value=f"<t:{get_next_check_deadline()}:f>", inline=False)
+                new_embed.set_field_at(2, name="Last checked by:", value=f"<@{reaction_user.id}> on <t:{get_current_discord_timecode()}:f>", inline=False)
 
-                await shop_message_history[2].edit(embeds=[new_embed,message_to_send_embed])
-                await shop_message_history[2].add_reaction("✉️")
+                try:
+                    new_embed.set_field_at(3,name="To do:", value=to_do_text)
+                    debug("Set field")
+                except IndexError:
+                    new_embed.add_field(name="To do:", value=to_do_text)
+                    debug("Add field")
 
-            await log_shop_check_activity(shop_message_history[0], channel.id, reaction_user.id, "⚠️ Warning")
+                raw_owners_text = shop_message_history[0].embeds[0].fields[0].value
+                owners_list = raw_owners_text.split("\n")
+                primary_owner_mc = owners_list[0].split(" (")[0]
+                primary_owner_discord = owners_list[0].split(" (")[1].replace(")", "")
 
-        # IF RED X
-        if react_emoji == "❌" and "Owners:" in msg.embeds[0].fields[0].name:
-            to_do_text = \
-                """
-*This shop will not close until all steps are completed!*
+                shop_name = shop_message_history[0].embeds[0].title.split(" (")[0]
 
-- Message the shop owner. You may copy and paste the message below. React 1️⃣ when complete.
-  - Send a screenshot of your communication with the owner in the district comments channel. React 2️⃣ when complete.
-    - Collect all materials, chests, armor stands, heads, signs, and banners from the shop. Store the items in the Staff HQ at 332, 64 on the nether roof. React 3️⃣ when complete.
-      - Remove the shop in the GUI Marketplace directory & `@Shop Check Admin` to notify them. React 4️⃣ when this step is complete. ```/guimd moderate review```
-"""
-            await shop_message_history[2].clear_reactions()
+                message_to_send_text = f"""```Hi {primary_owner_mc}! This is a quick message to let you know that your shop, {shop_name}, **has been deemed inactive for 4 weeks and will be reclaimed and put up for auction.** As a reminder, inactivity is defined as not keeping a fresh supply of stock within your shop and/or having unclaimed payments within your shop. Any items and materials reclaimed from your shop will be put towards funding community projects and events. Thanks!```"""
 
-            new_embed = shop_message_history[2].embeds[0]
+                message_to_send_embed = discord.Embed(color=10181046,
+                                                      title=f"Owner Contact Message - {primary_owner_discord}",
+                                                      description=message_to_send_text)
 
-            new_embed.set_field_at(0,name="Status:",value="❌ Reclaim",inline=False)
-            new_embed.set_field_at(1, name="Next Check Due:", value=f"<t:{get_next_check_deadline()}:f>", inline=False)
-            new_embed.set_field_at(2, name="Last checked by:", value=f"<@{reaction_user.id}> on <t:{get_current_discord_timecode()}:f>", inline=False)
+                await shop_message_history[2].edit(embeds=[new_embed, message_to_send_embed])
 
-            try:
-                new_embed.set_field_at(3,name="To do:", value=to_do_text)
-                debug("Set field")
-            except IndexError:
-                new_embed.add_field(name="To do:", value=to_do_text)
-                debug("Add field")
+                for r in ("1️⃣","2️⃣","3️⃣","4️⃣"):
+                    await shop_message_history[2].add_reaction(r)
 
-            raw_owners_text = shop_message_history[0].embeds[0].fields[0].value
-            owners_list = raw_owners_text.split("\n")
-            primary_owner_mc = owners_list[0].split(" (")[0]
-            primary_owner_discord = owners_list[0].split(" (")[1].replace(")", "")
+                await log_shop_check_activity(shop_message_history[0], channel.id, reaction_user.id, "❌ Reclaim")
 
-            shop_name = shop_message_history[0].embeds[0].title.split(" (")[0]
+        # Messaged and Reclaim step Buttons
+        if msg.embeds[0].fields[0].name == "Status:":
 
-            message_to_send_text = f"""Hi {primary_owner_mc}! This is a quick message to let you know that your shop, {shop_name}, **has been deemed inactive for 4 weeks and will be reclaimed and put up for auction.** As a reminder, inactivity is defined as not keeping a fresh supply of stock within your shop and/or having unclaimed payments within your shop. Any items and materials reclaimed from your shop will be put towards funding community projects and events. Thanks!"""
+            # IF ENVELOPE EMOJI
+            if react_emoji == "✉️" and shop_message_history[2].embeds[0].fields[0].value == "⚠️ Warning":
 
-            message_to_send_embed = discord.Embed(color=10181046,
-                                                  title=f"Owner Contact Message - {primary_owner_discord}",
-                                                  description=message_to_send_text)
+                new_embed = shop_message_history[2].embeds[0]
 
-            await shop_message_history[2].edit(embeds=[new_embed, message_to_send_embed])
+                # if new_embed.fields[0].value == "⚠️ Warning":
 
-            for r in ("1️⃣","2️⃣","3️⃣","4️⃣"):
-                await shop_message_history[2].add_reaction(r)
+                new_embed.set_field_at(0,name="Status:",value="⚠️ Warning / Owner Contacted",inline=False)
 
-            await log_shop_check_activity(shop_message_history[0], channel.id, reaction_user.id, "❌ Reclaim")
+                if len(new_embed.fields) > 3:
+                    new_embed.remove_field(3)
 
+                await shop_message_history[2].edit(embeds=[new_embed])
 
-        # IF ENVELOPE EMOJI
-        if react_emoji == "✉️" and msg.embeds[0].fields[0].name == "Status:" and shop_message_history[2].embeds[0].fields[0].value == "⚠️ Warning":
+                await msg.clear_reaction(react_emoji)
 
-            new_embed = shop_message_history[2].embeds[0]
+            # Reclaim specific buttons
+            if shop_message_history[2].embeds[0].fields[0].value == "❌ Reclaim":
 
-            # if new_embed.fields[0].value == "⚠️ Warning":
+                # IF REGIONAL 1 INDICATOR EMOJI
+                if react_emoji == "1️⃣":
 
-            new_embed.set_field_at(0,name="Status:",value="⚠️ Warning / Owner Contacted",inline=False)
+                    debug("️1️⃣ react found")
 
-            if len(new_embed.fields) > 3:
-                new_embed.remove_field(3)
+                    if len(shop_message_history[2].embeds) > 1:
 
-            await shop_message_history[2].edit(embeds=[new_embed])
+                        current_embed = shop_message_history[2].embeds[0]
 
-            await msg.clear_reaction(react_emoji)
+                        await shop_message_history[2].edit(embeds=[current_embed])
 
-        # IF REGIONAL 1 INDICATOR EMOJI
-        if react_emoji == "1️⃣" and msg.embeds[0].fields[0].name == "Status:" and shop_message_history[2].embeds[0].fields[0].value == "❌ Reclaim":
+                # IF REGIONAL 4 INDICATOR EMOJI
+                elif react_emoji == "4️⃣":
 
-            debug("️1️⃣ react found")
+                    debug("️4️⃣ react found")
 
-            if len(shop_message_history[2].embeds) > 1:
+                    new_name = channel.name.replace(f"{channel.name[0]}", "❌")
 
-                current_embed = shop_message_history[2].embeds[0]
+                    await channel.edit(name=new_name)
 
-                await shop_message_history[2].edit(embeds=[current_embed])
-
-        # IF REGIONAL 4 INDICATOR EMOJI
-        if react_emoji == "4️⃣" and msg.embeds[0].fields[0].name == "Status:" and shop_message_history[2].embeds[0].fields[0].value == "❌ Reclaim":
-
-            debug("️4️⃣ react found")
-
-            new_name = channel.name.replace(f"{channel.name[0]}", "❌")
-
-            await channel.edit(name=new_name)
-
-
+        # Using a try except here in case the user has already removed their reaction
         try:
             if react_emoji not in ["1️⃣","2️⃣","3️⃣","4️⃣"]:
                 await msg.remove_reaction(react_emoji,reaction_user)
@@ -2218,11 +2207,11 @@ async def pop(ctx):
 *This shop will not close until all steps are completed!*
 
 - Message the shop owner. You may copy and paste the message below. React 1️⃣ when complete.
-- Send a screenshot of your communication with the owner in the district comments channel. React 2️⃣ when complete.
-- Collect all materials, chests, armor stands, heads, signs, and banners from the shop. Store the items in the Staff HQ at 332, 64 on the nether roof. React 3️⃣ when complete.
-- Remove the shop in the GUI Marketplace directory & `@Shop Check Admin` to notify them. React 4️⃣ when this step is complete. ```/guimd moderate review```
+  - Send a screenshot of your communication with the owner in the district comments channel. React 2️⃣ when complete.
+    - Collect all materials, chests, armor stands, heads, signs, and banners from the shop. Store the items in the Staff HQ at 332, 64 on the nether roof. React 3️⃣ when complete.
+      - Remove the shop in the GUI Marketplace directory & `@Shop Check Admin` to notify them. React 4️⃣ when this step is complete. ```/guimd moderate review```
 """
-    reclaim_message_to_send_text = f"""Hi {primary_owner_mc}! This is a quick message to let you know that your shop, {shop_name}, **has been deemed inactive for 4 weeks and will be reclaimed and put up for auction.** As a reminder, inactivity is defined as not keeping a fresh supply of stock within your shop and/or having unclaimed payments within your shop. Any items and materials reclaimed from your shop will be put towards funding community projects and events. Thanks!"""
+    reclaim_message_to_send_text = f"""```Hi {primary_owner_mc}! This is a quick message to let you know that your shop, {shop_name}, **has been deemed inactive for 4 weeks and will be reclaimed and put up for auction.** As a reminder, inactivity is defined as not keeping a fresh supply of stock within your shop and/or having unclaimed payments within your shop. Any items and materials reclaimed from your shop will be put towards funding community projects and events. Thanks!```"""
 
     warning_to_do_text = \
         f"""
@@ -2307,7 +2296,7 @@ async def pop(ctx):
                 for react in ['✅', '⚠️', '❌']:
                     await sent_message.add_reaction(emoji=react)
 
-            if i == 2:
+            elif i == 2:
                 if shop_info["status"] == "❌ Reclaim":
                     for r in ("1️⃣", "2️⃣", "3️⃣", "4️⃣"):
                         await sent_message.add_reaction(r)
