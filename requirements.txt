@@ -1,0 +1,5 @@
+superutilities==0.2.6
+py-cord==2.8.1
+mysql-connector-python==26.7.0
+paramiko==5.0.0
+chat-exporter==3.1.0

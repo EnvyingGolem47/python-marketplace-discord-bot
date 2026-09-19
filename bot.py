@@ -3,7 +3,7 @@
 #
 # Python Marketplace Discord Bot - Built for Project Nebula
 #
-# Updated: 9/16/2026 - EnvyingGolem47
+# Updated: 9/18/2026 - EnvyingGolem47
 #
 # Please no judgment on how poorly my code looks :)
 
@@ -48,8 +48,8 @@ debug_mode = False
 # TODO: Change all owner embeds to create new field when reaching 1024 character limit in the value section. (up to 20 fields, 6000 character limit must be maintained 0-0)
 # TODO: Update how districts are handled to allow the use of shop counts. And also find an optimized way of counting the shops rather than an sql query or api call.
 # TODO: Remove all DEV Commands, and Stopwatches when done
-# TODO: Final decision on logger
-# TODO: Go through and mark off each actually completed TODO comment (some were done a while ago but never removed)
+
+# ======================== TEMPLATES AND PROCESSES ========================
 
 # The shop_ticket_process dictionary is how the bot goes through and runs the shop creation process.
 #  I made it this way to help maintain reliability within a shop creation ticket. Even if the bot goes offline or breaks, it can be easily recovered, without starting over.
@@ -67,7 +67,10 @@ debug_mode = False
 
 # response_type is the type of response expected (see above list) ^
 # message_regex (The second item in the list) is the regex that matches the question.
-# response_regex is the regex that the answer is expected to match ( ANY bypasses the check ) ( NUMBER will use .isdigit instead )
+# response_regex is the regex that the answer is expected to match
+#   ( ANY bypasses the check )
+#   ( TEXT will enforce the msg has at least 1 character in the name )
+#   ( NUMBER will use .isdigit instead )
 # yes_response (for REACTION_YES_OR_NO & REACTION_CHECKMARK) determines the sub process triggered for a YES ( NORMAL proceeds with main ticket process )
 # no_response (for REACTION_YES_OR_NO) determines the sub process triggered for a NO ( NORMAL proceeds with main ticket process )
 # max_number (for NUMBER) maximum number value that can be used
@@ -78,7 +81,7 @@ shop_ticket_process = \
         "Hi, <USER>! Let's create a shop! What is your shop's name?":
             {"response_type":'MESSAGE',
              "message_regex":r"Hi, \S*! Let's create a shop! What is your shop's name\?",
-             "response_regex":r"ANY",
+             "response_regex":r"TEXT",
              "stored_variable":"shop_name"},
 
         "Great! We will name this shop <LAST_MESSAGE>. Where is this shop located? X Y Z format, please!":
@@ -90,13 +93,13 @@ shop_ticket_process = \
         "<LAST_MESSAGE> is a fabulous location! Who owns this shop? Minecraft IGN, please!":
             {"response_type":'MESSAGE',
              "message_regex":r"\S* \S* \S* is a fabulous location! Who owns this shop\? Minecraft IGN, please!",
-             "response_regex":r"ANY",
+             "response_regex":r"TEXT",
              "stored_variable":"owners_mc_list"},
 
         "<LAST_MESSAGE>, cool. Hey, what's their Discord Username OR Discord ID?":
             {"response_type":'MESSAGE',
              "message_regex":r"\S*, cool\. Hey, what's their Discord Username OR Discord ID\?",
-             "response_regex":r"ANY",
+             "response_regex":r"TEXT",
              "stored_variable":"owners_discord_list"},
 
         '<LAST_MESSAGE>, got it! Are there any additional owners? React :regional_indicator_y: for "Yes", or :regional_indicator_n: for "No".':
@@ -160,7 +163,7 @@ sub_ticket_process = \
         "Another owner? Cool, what's their Minecraft IGN?":
             {"response_type":'MESSAGE',
              "message_regex":r"Another owner\? Cool, what's their Minecraft IGN\?",
-             "response_regex":r"ANY",
+             "response_regex":r"TEXT",
              "main_process_key":"<LAST_MESSAGE>, cool. Hey, what's their Discord Username OR Discord ID?",
              "stored_variable":"owners_mc_list"}
     }
@@ -388,7 +391,10 @@ help_template = \
 
 - **/report** : `Generates a report of unchecked shops.`
 
-- **/generate_guides** : `Sends embeds of guides where you run it. *Don't use unless you are actually updating the guides*`"""
+- **/generate_guides** : `Sends embeds of guides where you run it. *Don't use unless you are actually updating the guides*`
+
+- **/assign_role_to_district** : `Maps a Role to a District Number. Doing this will make that role be @'ed when a new shop is made.`
+"""
         }
     ]
 
@@ -474,7 +480,7 @@ Moves a shop to a different District.
 
 **Usable by Shop Check Admins only.**
 """,
-        "report": f"""`/report
+        "report": f"""`/report`
 
 Generates a report of all the shops that haven't been checked this week.
 Will not run if it thinks it is in actual Shop Channel.
@@ -483,12 +489,22 @@ This command takes in no parameters.
 
 **Usable by Shop Check Admins only.**
 """,
-        "generate_guides": f"""`/generate_guides
+        "generate_guides": f"""`/generate_guides`
 
 Generates and sends the Guide Embeds in the channel this was ran in. Will NOT delete old guide messages.
 DO NOT USE UNLESS ACTUALLY UPDATING THE GUIDE.
 
 This command takes in no parameters.
+
+**Usable by Shop Check Admins only.**
+""",
+        "assign_role_to_district": f"""`/assign_role_to_district`
+
+Maps a role (Such as @District 1) to a District number. This is what the bot checks when notifying a District of a new shop.
+
+**<role>** : The Discord Role to assign
+
+**<district_number>** : The District Number you want to assign the Discord Role to
 
 **Usable by Shop Check Admins only.**
 """
@@ -552,8 +568,10 @@ class DatabaseHandler:
         """
         cursor = self.connection.cursor(buffered=True)
         file = open(file_path,'r')
-        file_data = file.read()
-        cursor.execute(file_data)
+        file_data = file.read().split(";")
+        for l in file_data:
+            if len(l) > 2:
+                cursor.execute(l)
 
     def queue_query(self,query:str):
         """
@@ -596,10 +614,10 @@ class DatabaseHandler:
         check_discord_owners = self.query("SHOW COLUMNS FROM shops LIKE 'discord_owners';")
 
         if len(check_mc_owners) <= 0:
-            self.query("ALTER TABLE shops ADD mc_owners TEXT(802) NULL;")
+            self.query("ALTER TABLE shops ADD mc_owners TEXT(2048) NULL;")
 
         if len(check_discord_owners) <= 0:
-            self.query("ALTER TABLE shops ADD discord_owners TEXT(1608) NULL;")
+            self.query("ALTER TABLE shops ADD discord_owners TEXT(2048) NULL;")
 
         # Check if the new date and time column exists if not then create it
         check_datetime_checks = self.query("SHOW COLUMNS FROM shop_checks LIKE 'date_and_time';")
@@ -641,15 +659,30 @@ class Stopwatch:
         self.label = label
 
     def start(self,label:str=None):
-        self.start_time = datetime.datetime.now()
+        if debug_mode: # <- just in case I didn't listen to myself
+            self.start_time = datetime.datetime.now()
 
-        if label is not None:
-            self.label = label
+            if label is not None:
+                self.label = label
 
     def stop(self):
-        self.end_time = datetime.datetime.now()
-        debug(f"{self.label} : {self.end_time - self.start_time}")
+        if debug_mode:
+            self.end_time = datetime.datetime.now()
+            debug(f"{self.label} : {self.end_time - self.start_time}")
 
+# Just a small function to allow quick toggling of debug focused print statements. Look for debug_mode variable
+def debug(txt:str):
+    """
+    When debug variable is true, this will print to the console.
+    Surely leaving these around won't slow anything down. Surely.
+
+    :param txt:
+    :return:
+    """
+    if debug_mode:
+        print(txt)
+
+# ======================== START UP FUNCTIONS ========================
 def check_directories():
     """
     Checks to make sure all directories are present.
@@ -667,18 +700,6 @@ def check_directories():
             print("UNABLE TO CREATE DIRECTORIES - INVALID PERMISSIONS")
             input("Press enter to close:")
             raise KeyboardInterrupt
-
-# Just a small function to allow quick toggling of debug focused print statements. Look for debug_mode variable
-def debug(txt:str):
-    """
-    When debug variable is true, this will print to the console.
-    Surely leaving these around won't slow anything down. Surely.
-
-    :param txt:
-    :return:
-    """
-    if debug_mode:
-        print(txt)
 
 def get_next_check_deadline(checked_date=None):
     """
@@ -735,7 +756,7 @@ def get_variables() -> dict:
         token = SInput("Please enter your bot token: ", printQuestion=True)
         guild_id = SInput("Please enter your Discord server's ID: ", IsInt=True, printQuestion=True)
         ticket_category_id = SInput("Please enter the category ID where you want Shop Tickets to be created in: ", IsInt=True, printQuestion=True)
-        images_channel_id = SInput("Please enter the channel ID where you want Shop Images to be stored: ", IsInt=True, printQuestion=True)
+        graveyard_category_id = SInput("Please enter a category ID where you are going to temporarily store Reclaimed shops (Graveyard/Auction Category ID): ",IsInt=True, printQuestion=True)
         transcript_channel_id = SInput("Please enter the channel ID where you want Shop Transcripts to be stored: ", IsInt=True, printQuestion=True)
         shop_admin_id = SInput("Please enter the Shop Admin Role ID: ", IsInt=True, printQuestion=True)
         shop_staff_id = SInput("Please enter the Staff Role ID: ", IsInt=True, printQuestion=True)
@@ -758,7 +779,7 @@ def get_variables() -> dict:
                 "token": token,
                 "guild_id": guild_id,
                 "ticket_category_id":ticket_category_id,
-                "images_channel_id": images_channel_id,
+                "graveyard_category_id_list": [graveyard_category_id],
                 "transcript_channel_id": transcript_channel_id,
                 "shop_admin_id": shop_admin_id,
                 "shop_staff_id": shop_staff_id,
@@ -809,6 +830,7 @@ def load_district_role_mappings():
 
 check_directories()
 logger.log("==== BOT STARTING UP ====")
+debug("Debug mode enabled.")
 logger.log("Loading variables...", tag="[INFO] ")
 variables = get_variables()
 emoji_dict = load_emojis()
@@ -826,6 +848,12 @@ database.verify_format()
 logger.log("Connected and verified.", tag="[INFO] ")
 logger.log("Loading Bot...", tag="[INFO] ")
 
+channel_cache = {}
+message_cache = {}
+shop_id_cache = {}
+
+# ======================== NORMAL FUNCTIONS ========================
+
 def get_district_number(category_name:str) -> int:
     """
     Returns the number that a District category is.
@@ -841,7 +869,7 @@ def get_district_number(category_name:str) -> int:
     else:
         return None
 
-def construct_shop_embeds(embeds_template_og:list[dict],shop_info:dict):
+def construct_shop_embeds(embeds_template_og:list[dict],shop_info:dict) -> [discord.Embed]:
     """
     Constructs the embeds for a shop.
 
@@ -871,7 +899,9 @@ def construct_shop_embeds(embeds_template_og:list[dict],shop_info:dict):
                     shop_check_command_string += f"```/co l time:2w action:container radius:10 user:{owner}```"
 
                 else:
-                    shop_check_command_string += f"```/co l time:4w action:+session user:{owner}```"
+                    # Service shops no longer require a different command due to new rule changes.
+                    # Keeping this check here in case another rule change happens down the line
+                    shop_check_command_string += f"```/co l time:2w action:container radius:10 user:{owner}```"
 
                 if len(shop_info['owners_mc_list']) != i + 1:
                     shop_check_command_string += '\n'
@@ -936,8 +966,6 @@ def get_next_id() -> int:
     :return:
     """
 
-    # TODO: Verify this function is fine to leave as is
-    # TODO: Keep in sync with SQL Data (Maybe? Might not be needed)
     try:
         result = database.query("SELECT MAX(shop_id) FROM shops;")
         return int(result[0][0]) + 1
@@ -989,13 +1017,53 @@ def update_shop_check_command_embed(old_embed:discord.Embed, shop_channel_id:int
 
     return old_embed
 
+def is_shop_channel(channel) -> bool:
+    """
+    Determines if a channel is a shop's channel or not.
+
+    :param channel:
+    :return:
+    """
+
+    if type(channel) != discord.TextChannel:
+        return False
+
+    if forbidden_name.match(channel.name):
+        return False
+
+    if channel.category_id is None:
+        return False
+
+    cat_channel = bot.get_channel(channel.category_id)
+    if not district_regex.match(cat_channel.name) and channel.category_id not in variables["graveyard_category_id_list"]:
+        return False
+
+    return True
+
+def get_shop_id_from_channel_id(channel_id:int):
+    """
+    Will grab a shops SQL ID from its Channel ID.
+
+    :param channel_id:
+    :return:
+    """
+    channel_id_str = str(channel_id)
+
+    if channel_id_str not in shop_id_cache:
+        temp_shop_id = database.query(f"SELECT shop_id FROM shops WHERE shop_channel_id = {channel_id}")[0][0]
+        shop_id_cache[channel_id_str] = temp_shop_id
+    else:
+        temp_shop_id = shop_id_cache[channel_id_str]
+
+    return temp_shop_id
+
 # Loads the bot
 bot = discord.Bot(intents=discord.Intents.all())
 
-# Stores the Guild Object for later use
+# Stores a Blank Guild Object for later use
 primary_guild = discord.Guild
 
-# Async Functions
+# ======================== ASYNC FUNCTIONS ========================
 async def store_image(guild,attachment:discord.Attachment):
     """
     Saves the shop's image and returns the URL which it is stored at.
@@ -1004,9 +1072,6 @@ async def store_image(guild,attachment:discord.Attachment):
     :param attachment:
     :return:
     """
-
-    # TODO: Discord trick didn't work out too well, so SFTP with a Website server it is! :)
-    # TODO: Maybe check if image already exists, but since its the hash as the name i dont see any major problems with just not checking (famous last words)
 
     await attachment.save(attachment.filename)
     debug("Saving to sftp server")
@@ -1135,6 +1200,13 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
                     found_match = True
                     break
 
+                elif re.compile(shop_ticket_process[k]['message_regex']).fullmatch(msg.content) and shop_ticket_process[k]['response_type'] in ["REACTION_CHECKMARK"]:
+                    if msg.reactions[0].count > 1:
+                        shop_info[shop_ticket_process[k]['stored_variable']] = True
+
+                    found_match = True
+                    break
+
             if not found_match:
                 for k in sub_ticket_process_keys:
                     if re.compile(sub_ticket_process[k]['message_regex']).fullmatch(msg.content) and sub_ticket_process[k]['response_type'] in ["MESSAGE","IMAGE"]:
@@ -1154,8 +1226,7 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
                         found_match = True
                         break
 
-                    elif re.compile(sub_ticket_process[k]['message_regex']).fullmatch(msg.content) and sub_ticket_process[k][
-                        'response_type'] in ["REACTION_YES_OR_NO"]:
+                    elif re.compile(sub_ticket_process[k]['message_regex']).fullmatch(msg.content) and sub_ticket_process[k]['response_type'] in ["REACTION_YES_OR_NO"]:
 
                         #if msg.reactions[0].emoji in ['🇳', '❌', ':regional_indicator_n:', ':x:']:
                         if msg.reactions[1].count > 1:
@@ -1163,6 +1234,13 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
 
                         #elif msg.reactions[0].emoji in ['✅', '🇾', ':white_check_mark:', ':regional_indicator_y:']:
                         elif msg.reactions[0].count > 1:
+                            shop_info[sub_ticket_process[k]['stored_variable']] = True
+
+                        found_match = True
+                        break
+
+                    elif re.compile(sub_ticket_process[k]['message_regex']).fullmatch(msg.content) and sub_ticket_process[k]['response_type'] in ["REACTION_CHECKMARK"]:
+                        if msg.reactions[0].count > 1:
                             shop_info[sub_ticket_process[k]['stored_variable']] = True
 
                         found_match = True
@@ -1194,7 +1272,7 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
             # TODO: Possibly don't include if we're starting over with a blank slate.
             # TODO: Actually if we do start over with a blank slate, lets make all new records that have the okay status for the shops
 
-            last_check = database.query(f"SELECT shop_status, checked_by_id, date_and_time FROM shop_checks WHERE shop_id = {shop_info['sql_id']} ORDER BY shop_check_id ASC")[0]
+            last_check = database.query(f"SELECT shop_status, checked_by_id, date_and_time FROM shop_checks WHERE shop_id = {shop_info['sql_id']} ORDER BY shop_check_id DESC LIMIT 1")[0]
 
             shop_info['status'] = f"{last_check[0]}"
             shop_info['next_check'] = f"<t:{temp_2}:f>"  # <t:1776276900:f>
@@ -1237,6 +1315,7 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
     # TODO: SANITIZE SHOP NAME HERE
     shop_info['shop_name'] = SanitizeString(shop_info['shop_name'],bannedCharacters=['$', '&', '{', '}', '\\', '/', '[', ']','(',')','|','<','>'])
 
+    # TODO: DECIDE WHAT, IF ANYTHING, TO DO ABOUT DUPLICATE SHOP NAMES
 
     # Create owner strings to upload into the SQL Database
     mc_owners_list_str = ""
@@ -1273,7 +1352,10 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
     if new_category is None:
         new_category = await primary_guild.fetch_channel(category_id)
 
-    new_shop_channel = await primary_guild.create_text_channel(f"🆕｜{shop_info['shop_name']}",category=new_category)
+    if shop_already_in_database and shop_info['status'] == "❌ Reclaim":
+        new_shop_channel = await primary_guild.create_text_channel(f"❌｜{shop_info['shop_name']}", category=new_category)
+    else:
+        new_shop_channel = await primary_guild.create_text_channel(f"🆕｜{shop_info['shop_name']}",category=new_category)
 
     # TODO: 10- Send constructed shop embeds
     # Send first embed and add reactions to it, then send the rest (Trying to keep the interface as close to the same as possible)
@@ -1303,38 +1385,11 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
     debug(f'{shop_info}')
     return True
 
-def is_shop_channel(channel) -> bool:
-    """
-    Determines if a channel is a shop's channel or not.
-
-    :param channel:
-    :return:
-    """
-
-    if type(channel) != discord.TextChannel:
-        return False
-
-    if forbidden_name.match(channel.name):
-        return False
-
-    if channel.category_id is None:
-        return False
-
-    cat_channel = bot.get_channel(channel.category_id)
-    if not district_regex.match(cat_channel.name):
-        return False
-
-    return True
-
-# TESTING THIS OUT =====================================================================================================================
-channel_cache = {}
-message_cache = {}
-shop_id_cache = {}
-
-# Grab the channel the reaction was in (Cache the API response if it is not a new channel)
 async def get_from_channel_cache(channel_id:int):
     """
     Gets a channel from cache OR will fetch and cache an unseen one.
+
+    This is to try and help with API times and prevent rate limiting.
 
     :param channel_id:
     :return:
@@ -1358,7 +1413,15 @@ async def get_from_message_cache(msg_id:int,channel):
     return message_cache[msg_id_str]
 
 async def delete_channel(channel,reason="Shop closed."):
+    """
+    Quick deletion of a channel.
 
+    Please make sure to use this and not just channel.delete() as this also removes it from the cache.
+
+    :param channel:
+    :param reason:
+    :return:
+    """
     global channel_cache
     str_channel_id = str(channel.id)
 
@@ -1368,44 +1431,48 @@ async def delete_channel(channel,reason="Shop closed."):
     await channel.delete(reason=reason)
 
 async def get_shop_channel_history(shop_channel):
+    """
+    For use in getting the Shop embed messages within a shop channel.
+
+    If it cannot find all 4 messages, it will return [], False.
+    Otherwise it will return [Messages], True
+
+    :param shop_channel:
+    :return:
+    """
+
     shop_message_history = []
     async for msg in shop_channel.history(limit=8,oldest_first=True): # Limiting it to 8 messages as there shouldn't be any other than the shop itself
         if msg.author.id == bot.user.id:
             shop_message_history.append(msg)
 
     if len(shop_message_history) < 4:
-        logger.log(f"Cannot find all bot messages in {shop_channel.id}","[ERROR] ")
-        return False
+        logger.log(f"Cannot find all bot messages in <#{shop_channel.id}>","[WARN] ")
+        return shop_message_history, False
 
-    return shop_message_history
-
-
-def get_shop_id_from_channel_id(channel_id:int):
-    channel_id_str = str(channel_id)
-
-    if channel_id_str not in shop_id_cache:
-        temp_shop_id = database.query(f"SELECT shop_id FROM shops WHERE shop_channel_id = {channel_id}")[0][0]
-        shop_id_cache[channel_id_str] = temp_shop_id
-    else:
-        temp_shop_id = shop_id_cache[channel_id_str]
-
-    return temp_shop_id
-
-# END OF TESTING THIS OUT ==============================================================================================================
+    return shop_message_history, True
 
 
-# New event to print when bot has successfully connected
+# ======================== DISCORD EVENT ASYNC FUNCTIONS ========================
+
 @bot.event
 async def on_ready():
+    """
+    Runs when bot has connected to Discord.
+    This just loads in the guild, cleans the logs before any command is ran.
+
+    :return:
+    """
     global primary_guild
     logger.clean_logs(14)
     primary_guild = await bot.fetch_guild(variables['guild_id'])
     logger.log(f"Loaded and Connected as {bot.user}", tag="[INFO] ")
 
-# Event triggered when message sent. Handles Shop Creation.
 @bot.event
 async def on_message(msg):
     """
+    Triggers when a message is sent. Handles shop creation.
+
     :param msg:
     :return:
     """
@@ -1535,6 +1602,10 @@ async def on_message(msg):
             if expected_response[1] == r"ANY":
                 accepted_response = True
 
+            elif expected_response[1] == r"TEXT":
+                if len(msg.content.strip()) >= 1:
+                    accepted_response = True
+
             elif expected_response[1] == r"NUMBER" and msg.content.isdigit():
 
                 min_pass = True
@@ -1602,7 +1673,6 @@ async def on_message(msg):
 
 
             # Parse and retrieve any data that needs to be filled.
-            # TODO: Expand on more maybe?
             next_message = next_message.replace(f'<LAST_MESSAGE>',f'{msg.content}')
 
             debug(f"NEXT MESSAGE: {next_message}")
@@ -1623,7 +1693,6 @@ async def on_message(msg):
             # If successfully made shop channel, delete the ticket channel
             if success:
 
-                #await msg.channel.delete()
                 await delete_channel(msg.channel,"")
 
             else:
@@ -1634,14 +1703,16 @@ async def on_message(msg):
         else:
             await msg.delete()
 
-# Event triggered when a reaction has been added. Handles Shop Creation and Shop Check
 @bot.event
 async def on_raw_reaction_add(reaction_data):
+    """
+    Triggers when a reaction is added to a message.
 
-    sw = Stopwatch("Check validity section")
-    sw3 = Stopwatch("") # sw2 is used inside of other function
+    Handles shop checks and parts of the Shop creation process.
 
-    sw.start()
+    :param reaction_data:
+    :return:
+    """
 
     # Check if the emoji is a valid emoji first
     react_emoji = str(reaction_data.emoji)
@@ -1670,20 +1741,14 @@ async def on_raw_reaction_add(reaction_data):
         debug(f"Reaction not in valid channel.\n{channel}")
         return
 
-    # Get Message, Guild, and Channel
-    #guild = await bot.fetch_guild(reaction_data.guild_id)
-    #channel = await guild.fetch_channel(reaction_data.channel_id)
-    #channel = await bot.fetch_channel(reaction_data.channel_id)
-
     channel_category = bot.get_channel(channel.category_id)
 
     debug(f"channel_category: {channel_category}")
     debug(f"Channel type: {type(channel)}")
 
-    #msg = await channel.fetch_message(reaction_data.message_id)
     msg = await get_from_message_cache(reaction_data.message_id,channel)
 
-    sw.stop()
+    debug(f"msg embed length: {len(msg.embeds)}")
 
     # SHOP CREATION PROCESS
     # If reaction was in the ticket category
@@ -1691,6 +1756,10 @@ async def on_raw_reaction_add(reaction_data):
 
         emoji_string = str(reaction_data.emoji)
         debug(f"in watched category & channel. Emoji: {emoji_string}")
+
+        if channel.topic != f"{reaction_user.id}":
+            await msg.remove_reaction(react_emoji, reaction_user)
+            return
 
         expected_response = ""
         accepted_response = False
@@ -1803,7 +1872,7 @@ async def on_raw_reaction_add(reaction_data):
 
         # If last step, finish creating the shop
         elif next_step == len(shop_ticket_process_keys):
-            # TODO: Create function to create the new shop
+            # TODO: Add create shop here later, i never see this being used
             debug("Creating new shop - reaction")
             debug("Not implemented yet") # Remove when implemented
             logger.log("Reaction Add Shop Creation Triggered (it doesn't exist)","[?????] ") # Funny confused tag
@@ -1811,13 +1880,13 @@ async def on_raw_reaction_add(reaction_data):
 
     # SHOP CHECK PROCESS
     # If reaction was in a shop category
-    elif district_regex.fullmatch(channel_category.name) and msg.author == bot.user and reaction_user != bot.user:
+    elif district_regex.fullmatch(channel_category.name) and msg.author == bot.user and reaction_user != bot.user and len(msg.embeds) > 0:
 
-        sw.start("Get shop channel history")
+        shop_message_history, history_success = await get_shop_channel_history(channel)
 
-        shop_message_history = await get_shop_channel_history(channel)
-
-        sw.stop()
+        if not history_success:
+            logger.log(f"{channel.name} | {channel.id} needs to be repopulated.", "[WARN] ")
+            return
 
         #shop_message_history = []
         #async for msg_2 in channel.history(limit=4,oldest_first=True):
@@ -1851,10 +1920,7 @@ async def on_raw_reaction_add(reaction_data):
             :return:
             """
             # Players who receive 4 warnings in a 3 month period will have their shop reclaimed automatically
-            sw2 = Stopwatch("Log shop check activity")
-            sw2.start()
 
-            # temp_shop_id = database.query(f"SELECT shop_id FROM shops WHERE shop_channel_id = {shop_channel_id}")[0][0]
             temp_shop_id = get_shop_id_from_channel_id(shop_channel_id)
 
             database.query(f"INSERT INTO shop_checks(shop_id,checked_by_id,shop_status,date_and_time) VALUES({temp_shop_id},{checked_by_id},'{status}','{str(datetime.datetime.now()).split('.')[0]}');)")
@@ -1876,14 +1942,12 @@ async def on_raw_reaction_add(reaction_data):
 
                 await shop_info_message.edit(embeds=[new_embed_two])
 
-            sw2.stop()
-
             return warnings_count
 
-        sw.start("Processing actual check")
+        debug(f"Owners in fields[0].name? {"Owners:" in msg.embeds[0].fields[0].name}")
 
         # IF CHECKMARK
-        if react_emoji == "✅":
+        if react_emoji == "✅" and "Owners:" in msg.embeds[0].fields[0].name:
 
             new_embed = shop_message_history[2].embeds[0]
 
@@ -1902,7 +1966,7 @@ async def on_raw_reaction_add(reaction_data):
 
 
         # IF WARNING
-        if react_emoji == "⚠️":
+        if react_emoji == "⚠️" and "Owners:" in msg.embeds[0].fields[0].name:
 
             new_embed = shop_message_history[2].embeds[0]
 
@@ -1966,7 +2030,7 @@ async def on_raw_reaction_add(reaction_data):
             await log_shop_check_activity(shop_message_history[0], channel.id, reaction_user.id, "⚠️ Warning")
 
         # IF RED X
-        if react_emoji == "❌":
+        if react_emoji == "❌" and "Owners:" in msg.embeds[0].fields[0].name:
             to_do_text = \
                 """
 *This shop will not close until all steps are completed!*
@@ -1991,13 +2055,6 @@ async def on_raw_reaction_add(reaction_data):
                 new_embed.add_field(name="To do:", value=to_do_text)
                 debug("Add field")
 
-            # await shop_message_history[2].edit(embeds=[new_embed])
-
-            # TODO: Add in message template that can be sent to the shop owner
-            # TODO: TEST THIS
-
-
-
             raw_owners_text = shop_message_history[0].embeds[0].fields[0].value
             owners_list = raw_owners_text.split("\n")
             primary_owner_mc = owners_list[0].split(" (")[0]
@@ -2020,23 +2077,23 @@ async def on_raw_reaction_add(reaction_data):
 
 
         # IF ENVELOPE EMOJI
-        if react_emoji == "✉️":
+        if react_emoji == "✉️" and msg.embeds[0].fields[0].name == "Status:" and shop_message_history[2].embeds[0].fields[0].value == "⚠️ Warning":
 
             new_embed = shop_message_history[2].embeds[0]
 
-            if new_embed.fields[0].value == "⚠️ Warning":
+            # if new_embed.fields[0].value == "⚠️ Warning":
 
-                new_embed.set_field_at(0,name="Status:",value="⚠️ Warning / Owner Contacted",inline=False)
+            new_embed.set_field_at(0,name="Status:",value="⚠️ Warning / Owner Contacted",inline=False)
 
-                if len(new_embed.fields) > 3:
-                    new_embed.remove_field(3)
+            if len(new_embed.fields) > 3:
+                new_embed.remove_field(3)
 
             await shop_message_history[2].edit(embeds=[new_embed])
 
             await msg.clear_reaction(react_emoji)
 
         # IF REGIONAL 1 INDICATOR EMOJI
-        if react_emoji == "1️⃣":
+        if react_emoji == "1️⃣" and msg.embeds[0].fields[0].name == "Status:" and shop_message_history[2].embeds[0].fields[0].value == "❌ Reclaim":
 
             debug("️1️⃣ react found")
 
@@ -2047,7 +2104,7 @@ async def on_raw_reaction_add(reaction_data):
                 await shop_message_history[2].edit(embeds=[current_embed])
 
         # IF REGIONAL 4 INDICATOR EMOJI
-        if react_emoji == "4️⃣":
+        if react_emoji == "4️⃣" and msg.embeds[0].fields[0].name == "Status:" and shop_message_history[2].embeds[0].fields[0].value == "❌ Reclaim":
 
             debug("️4️⃣ react found")
 
@@ -2059,60 +2116,33 @@ async def on_raw_reaction_add(reaction_data):
         try:
             if react_emoji not in ["1️⃣","2️⃣","3️⃣","4️⃣"]:
                 await msg.remove_reaction(react_emoji,reaction_user)
-            sw.stop()
-        except:
+        except discord.NotFound:
             pass
-            sw.stop()
 
-# TODO: COMMANDS TO BE CREATED
-"""
-DONE !mb create : Creates a shop ticket. Respond to the prompts in the ticket to create a shop.
+# ======================== DISCORD COMMANDS ========================
 
-!mb pop : Repopulates a shop channel in the event a shop channel is made and doesn't populate, or if the bot breaks before the embeds post. Only @Shop Check Admin should be able to use this command. This command may only be used in a shop channel.
-
-DONE but needs work !mb closeshop : Closes the shop. Takes a transcript of the channel and deletes the channel. Should only be used by @Shop Check Admin and only if the shop has been demolished, auctioned, or otherwise closed. This command should only be able to used in a shop channel.
-
-DONE !mb change shopname "<old shop name>" "<new shop name>" : Changes the name of a shop and repopulates embeds for the shop channel. Usable only by @Staff
-
-DONE !mb change coords "<shop name>" "<x y z>" : Changes the coords of a shop and repopulates embeds for the shop channel. Usable only by @Staff
-
-DONE !mb change largeshop "<shop name>" <True/False> : Changes the large shop tag to either True or False, depending on the option entered. Usable only by @Staff
-
-DONE !mb change serviceshop "<shop name>" <True/False> : Changes the service shop tag to either True or False, depending on the option entered. True and False are case-sensitive!! Usable only by @Staff
-
-DONE RENAMED !mb change district "<shop name>" <district#> : Changes the district number the shop is assigned to. Moves the shop channel to the corresponding district category and mentions that district's role. Usable only by @Staff
-
-DONE !mb update owner1 "<shop name>" "<new name>" "<new owner discord ID>" : Changes the 1st owner's name and Discord ID (DiscordID#0000 format) for the shop entered as "shop name". This command may also be used to update the 2nd and 3rd owner names by substituting owner2 and owner3 for "owner1" in the command. Usable only by @Staff
-
-DONE RENAMED !mb newimage "<shop name>" : Changes the image for the shop named in "shop name". This command may only be used in a district comments channel! Usable only by @Staff
-
-IGNORE just delete the channel instead !mb closeticket <ticket#> : Closes the ticket with the ticket number entered and sends a transcript to #shop-ticket-logs. Usable only by @Shop Check Admin.
-
-DONE !mb search <search term> : allows you to search for shops based on various attributes such as the shop's name, owner names, and owner Discord IDs
-
-DONE !mb claim
-
-DONE !mb report : admin command to grab a report on open shops that have not been checked the current week.
-"""
-
-# !mb create
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Initiates a shop creation ticket.")
 @discord.ext.commands.has_role(variables['shop_staff_id'])
 async def create(ctx):
+    """
+    Starts the shop creation process by creating a new ticket channel.
+
+    Used to be !mb create
+
+    :param ctx:
+    :return:
+    """
 
     try:
-        ticket_category = None
-        for c in ctx.guild.categories:
-            if c.id == variables['ticket_category_id']:
-                ticket_category = c
+
+        ticket_category = await primary_guild.fetch_channel(variables['ticket_category_id'])
 
         if ticket_category is None:
             logger.log("Category not found.","[ERROR] ")
-
             raise discord.NotFound
 
         else:
-            new_ticket = await ticket_category.create_text_channel(f"ticket-{get_next_id()}-{ctx.author.name}")
+            new_ticket = await ticket_category.create_text_channel(f"ticket-{get_next_id()}-{ctx.author.name}",topic=f"{ctx.author.id}")
 
             await new_ticket.send(content=f"{list(shop_ticket_process.keys())[0].replace('<USER>',f'<@{ctx.author.id}>')}")
 
@@ -2122,11 +2152,18 @@ async def create(ctx):
         logger.log(f"{e}","[ERROR] ")
         await ctx.respond("Error creating ticket...\nPlease contact Admins.", ephemeral=True)
 
-# !mb pop
 @bot.slash_command(guild_ids=[variables['guild_id']],description="NOT FINISHED - SCARY WIP - Repopulates the shop this command is ran in.")
 @discord.ext.commands.has_role(variables['shop_admin_id'])
 async def pop(ctx):
-    # TODO: Finish
+    """
+    Repopulates the shop this command is ran in. Still not 100% sure this is flawless but it works for the most part.
+    # TODO: REALLY Stress test this command
+
+    Used to be !mb pop
+
+    :param ctx:
+    :return:
+    """
 
     await ctx.respond("Ok! (Surely this'll work juuust fine)", ephemeral=True)
 
@@ -2137,15 +2174,17 @@ async def pop(ctx):
     result = database.query(f"SELECT shop_id, shop_name, coords, shop_init, large_shop, service_shop, image, mc_owners, discord_owners FROM shops WHERE shop_channel_id = {channel.id}")
     #                                0        1          2       3          4           5             6      7          8
 
-    # TODO: You ever get feeling something REALLY bad is going to happen?
-
     if len(result) <= 0 and not forbidden_name.fullmatch(channel.name):
         await ctx.respond("Not a valid Shop.",ephemeral=True)
 
     # Reconstruct Shop info to feed into construct_shop_embeds
     s = result[0]
 
-    result_two = database.query(f"SELECT shop_status, checked_by_id, date_and_time  FROM shop_checks WHERE shop_id = {s[0]}")
+    image_url = s[6]
+    if not image_url.startswith("http"):
+        image_url = f"https://placehold.co/600x400/png" # PLACEHOLDER MOMENT
+
+    result_two = database.query(f"SELECT shop_status, checked_by_id, date_and_time  FROM shop_checks WHERE shop_id = {s[0]} ORDER BY shop_check_id DESC LIMIT 1")
     #                                    0            1              2
     sc = result_two[0]
 
@@ -2155,15 +2194,64 @@ async def pop(ctx):
             "shop_coords": s[2],
             "owners_mc_list": s[7].split("|"),
             "owners_discord_list": s[8].split("|"),
-            "initialized": s[3],
-            "large_shop": s[4],
-            "service_shop": s[5],
-            "shop_image_url": s[6],
+            "initialized": bool(s[3]),
+            "large_shop": bool(s[4]),
+            "service_shop": bool(s[5]),
+            "shop_image_url": image_url,
             "status":sc[0],
             "next_check":f"<t:{get_next_check_deadline(sc[2])}:f>",
             "last_checked_by":f"<@{sc[1]}>",
             "last_checked":f"<t:{int(sc[2].timestamp())}:f>"
         }
+
+    # TODO: Make it so that if /pop is ran when the bot has a todo message and other reactions, it should put them back (for when its being warned, or reclaimed)
+
+    primary_owner_mc = shop_info["owners_mc_list"][0]
+    primary_owner_discord = shop_info["owners_discord_list"][0]
+
+    shop_name = shop_info["shop_name"]
+
+
+    # TODO Maybe make these text boxes global variables and move them to the top? Only issue would be dealing with the placeholder text. Function might be better.
+    reclaim_to_do_text = \
+        """
+*This shop will not close until all steps are completed!*
+
+- Message the shop owner. You may copy and paste the message below. React 1️⃣ when complete.
+- Send a screenshot of your communication with the owner in the district comments channel. React 2️⃣ when complete.
+- Collect all materials, chests, armor stands, heads, signs, and banners from the shop. Store the items in the Staff HQ at 332, 64 on the nether roof. React 3️⃣ when complete.
+- Remove the shop in the GUI Marketplace directory & `@Shop Check Admin` to notify them. React 4️⃣ when this step is complete. ```/guimd moderate review```
+"""
+    reclaim_message_to_send_text = f"""Hi {primary_owner_mc}! This is a quick message to let you know that your shop, {shop_name}, **has been deemed inactive for 4 weeks and will be reclaimed and put up for auction.** As a reminder, inactivity is defined as not keeping a fresh supply of stock within your shop and/or having unclaimed payments within your shop. Any items and materials reclaimed from your shop will be put towards funding community projects and events. Thanks!"""
+
+    warning_to_do_text = \
+        f"""
+    - Contact {primary_owner_mc} ({primary_owner_discord}). You may copy/paste the message below.
+      - Create a thread in this channel and post your evidence (screenshot of contact) in that thread.
+        - React ✉️ to this message to confirm the owner has been contacted.
+                        """
+
+    warning_message_to_send_text = \
+        f"""
+        ```Hi {primary_owner_mc}! It appears your shop, {shop_name}, has been inactive for 2 weeks. We require shop owners to be active to reduce the number of empty or neglected shops in our marketplace. For a shop to be considered inactive, the following must be true:
+
+        • The owner has not interacted with items in any of the chests in the shop for 4 weeks.
+        • The shop has not been added to a marketplace directory within 4 weeks of being built.
+
+        And ONE of the following: 
+
+        • There have been unclaimed diamonds in the shop for 4 weeks.
+        OR
+        • There has been no stock, or not enough stock to fulfill the quantity for the price that was set, for 4 weeks.
+
+        The purpose of this message is to kindly remind you to restock your shop and/or pick up your unclaimed payments! If you do not do so within 2 weeks **your shop will be reclaimed and put up for auction.**`
+
+        Please message me when you do so. If you have any questions, feel free to ask! Thanks!```
+                        """
+
+
+
+
 
     # Reconstruct shop embeds
     embeds = construct_shop_embeds(shop_embeds_template,shop_info)
@@ -2184,11 +2272,25 @@ async def pop(ctx):
 
     # MSG INDEX 3 = Shop check command and where to put message template for sending
 
-    # TODO: Make it so that if /pop is ran when the bot has a todo message and other reactions, it should put them back (for when its being warned, or reclaimed)
+    if shop_info["status"] == "⚠️ Warning":
+        embeds[2].add_field(name="To do:", value=warning_to_do_text)
 
-    messages = await get_shop_channel_history(ctx.channel)
+        if shop_info["status"] == "⚠️ Warning":
+            message_to_send_embed = discord.Embed(color=10181046,
+                                                  title=f"Owner Contact Message - {primary_owner_discord}",
+                                                  description=warning_message_to_send_text)
+            embeds.append(message_to_send_embed)
 
-    if messages is False:
+    elif shop_info["status"] == "❌ Reclaim":
+        embeds[2].add_field(name="To do:", value=reclaim_to_do_text)
+        message_to_send_embed = discord.Embed(color=10181046,
+                                              title=f"Owner Contact Message - {primary_owner_discord}",
+                                              description=reclaim_message_to_send_text)
+        embeds.append(message_to_send_embed)
+
+    messages, history_success = await get_shop_channel_history(ctx.channel)
+
+    if history_success is False:
         logger.log(f"Deleting any present messages...","[INFO] ")
 
         for m in messages:
@@ -2197,21 +2299,57 @@ async def pop(ctx):
         logger.log(f"Resending shop messages for {shop_info['shop_name']}...","[INFO] ")
 
         for i, e in enumerate(embeds):
-            sent_message = await channel.send(embeds=embeds[i])
+
+            if i != 4:
+                sent_message = await channel.send(embeds=[embeds[i]])
 
             if i == 0:
                 for react in ['✅', '⚠️', '❌']:
                     await sent_message.add_reaction(emoji=react)
 
+            if i == 2:
+                if shop_info["status"] == "❌ Reclaim":
+                    for r in ("1️⃣", "2️⃣", "3️⃣", "4️⃣"):
+                        await sent_message.add_reaction(r)
+
+                    if len(embeds) >= 5:
+                        await sent_message.edit(embeds=[embeds[i], embeds[4]])
+
+                elif shop_info["status"] == "⚠️ Warning":
+                    if len(embeds) >= 5:
+                        await sent_message.add_reaction(emoji="✉️")
+                        await sent_message.edit(embeds=[embeds[i], embeds[4]])
+
     else:
+
+        for m in messages:
+            await m.clear_reactions()
+
         await messages[0].edit(embeds=[embeds[0]])
+        for react in ['✅', '⚠️', '❌']:
+            await messages[0].add_reaction(emoji=react)
+
         await messages[1].edit(embeds=[embeds[1]])
-        await messages[2].edit(embeds=[embeds[2]])
+
+        if len(embeds) >= 5:
+            await messages[2].edit(embeds=[embeds[2],embeds[4]]) # ,embeds[4] cause we add the send message at the very end in this function
+
+        else:
+            await messages[2].edit(embeds=[embeds[2]])
+
+        if shop_info["status"] == "⚠️ Warning" and len(embeds) >= 5:
+            await messages[2].add_reaction(emoji="✉️")
+
+        elif shop_info["status"] == "❌ Reclaim":
+            for react in ("1️⃣", "2️⃣", "3️⃣", "4️⃣"):
+                await messages[2].add_reaction(react)
+
         await messages[3].edit(embeds=[embeds[3]])
+
+
 
     await ctx.respond("Done?",ephemeral=True)
 
-# !mb help
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Displays a list of commands.")
 @discord.ext.commands.has_role(variables['shop_staff_id'])
 async def help(ctx,command: discord.Option(str,description="Command you want more info on.",required=False,default=None)):
@@ -2219,6 +2357,8 @@ async def help(ctx,command: discord.Option(str,description="Command you want mor
     Sends a list of commands.
 
     If command is not none, it will try and send a manual for one if available.
+
+    Used to be !mb help
 
     :param ctx:
     :param command:
@@ -2243,12 +2383,22 @@ async def help(ctx,command: discord.Option(str,description="Command you want mor
 
         await ctx.respond(embeds=[new_embed],ephemeral=True)
 
-# !mb claim
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Claims a shop for you.")
 @discord.ext.commands.has_role(variables['shop_staff_id'])
 async def claim(ctx,channel: discord.Option(discord.TextChannel, description="")):
-    debug(f"CTX Type: {type(ctx)}")
-    debug(f"{ctx.author} trying to claim {channel}")
+    """
+    Will claim the desired shop for whoever ran this command.
+
+    Used to be !mb claim
+
+    :param ctx:
+    :param channel:
+    :return:
+    """
+
+    if is_shop_channel(ctx.channel):
+        await ctx.respond("Please don't use this command in a shop channel...", ephemeral=True)
+        return
 
     if not is_shop_channel(channel):
         await ctx.respond("Invalid Channel", ephemeral=True)
@@ -2258,21 +2408,25 @@ async def claim(ctx,channel: discord.Option(discord.TextChannel, description="")
         new_name = channel.name.replace(f"{channel.name[0]}",emoji_dict[f"{ctx.author.id}"])
     except KeyError:
         logger.log(f"Emoji for {ctx.author.id} was not found.","[ERROR] ")
-        await ctx.respond("Couldn't find emoji.", ephemeral=True)
+        await ctx.respond("Couldn't find your emoji.", ephemeral=True)
         return
 
     await channel.edit(name=new_name)
 
-    if not is_shop_channel(ctx.channel):
-        await ctx.respond(f"Claimed <#{channel.id}>")
-    else:
-        await ctx.respond(f"Claimed <#{channel.id}>",ephemeral=True)
+    await ctx.respond(f"Claimed <#{channel.id}>")
 
-# !mb closeshop
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Closes a shop that has been marked for reclaim. Shop Admins only.")
 @discord.ext.commands.has_role(variables['shop_admin_id'])
 async def close_shop(ctx):
-    # TODO: Finish
+    """
+    Will close the shop that this command is ran in.
+    Shop must be marked for reclaim.
+
+    Used to be !mb closeshop
+
+    :param ctx:
+    :return:
+    """
 
     channel = ctx.channel
 
@@ -2280,9 +2434,9 @@ async def close_shop(ctx):
         await ctx.respond("Invalid Channel", ephemeral=True)
         return
 
-    shop_message_history = await get_shop_channel_history(channel)
+    shop_message_history, history_success = await get_shop_channel_history(channel)
 
-    if shop_message_history is False:
+    if history_success is False:
         await ctx.respond("Can't find messages", ephemeral=True)
         return
 
@@ -2317,38 +2471,52 @@ async def close_shop(ctx):
             filename=f"transcript-{ctx.channel.name}.html",
         )
 
-        transcript_channel = await get_from_channel_cache(variables["transcripts_channel_id"])
+        transcript_channel = await get_from_channel_cache(variables["transcript_channel_id"])
         await transcript_channel.send(file=transcript_file)
 
-        #await bot.get_channel(variables["transcripts_channel_id"]).send(file=transcript_file)
-
         database.query(f"UPDATE shops SET shop_status = \"Closed\" WHERE shop_channel_id = \"{channel.id}\";")
-
-        #await channel.delete(reason="Shop closed.")
 
         await delete_channel(channel)
 
     else:
         await ctx.respond(f"Shop not marked for Reclaim.", ephemeral=True)
 
-# New command to update a shop's image
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Updates an image for a shop. Note: This can take a minute.")
 @discord.ext.commands.has_role(variables['shop_staff_id'])
 async def update_image(ctx, channel:discord.Option(discord.TextChannel,description="Channel to update image") ,image: discord.Option(discord.Attachment,description="Image update to")):
-    debug("Updating image")
+    """
 
-    # TODO: Check to make sure this is an image filetype
+    Updates a shop's image to a new one.
+
+    Used to be !mb newimage
+
+    :param ctx:
+    :param channel:
+    :param image:
+    :return:
+    """
+
+    debug("Updating image")
 
     if not is_shop_channel(channel):
         await ctx.respond("Invalid Channel", ephemeral=True)
         return
 
+    is_image = False
+    for ext in ['.png', '.jpg', '.jpeg']:
+        if image.filename.endswith(ext):
+            is_image = True
+
+    if not is_image:
+        await ctx.respond("Not an image.", ephemeral=True)
+        return
+
     await ctx.respond(f"Updating <#{channel.id}>'s Image",ephemeral=True)
     url = await store_image(primary_guild,image)
 
-    shop_message_history = await get_shop_channel_history(channel)
+    shop_message_history, history_success = await get_shop_channel_history(channel)
 
-    if shop_message_history is False:
+    if history_success is False:
         await ctx.respond("Can't find messages", ephemeral=True)
         return
 
@@ -2376,8 +2544,6 @@ async def update_image(ctx, channel:discord.Option(discord.TextChannel,descripti
 
     database.query(f"UPDATE shops SET image = \"{url}\" WHERE shop_channel_id = \"{channel.id}\"")
 
-# New command to update information about a shop
-# !mb change shopname, coords, largeshop, serviceshop
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Updates information about a shop.")
 @discord.ext.commands.has_role(variables['shop_staff_id'])# @discord.ext.commands.check(not is_shop_channel)
 async def update_shop(ctx, channel: discord.Option(discord.TextChannel,description="Shop's channel"),
@@ -2385,7 +2551,19 @@ async def update_shop(ctx, channel: discord.Option(discord.TextChannel,descripti
                       coords: discord.Option(str,description="Coords to change to",required=False,default=None),
                       large_shop: discord.Option(bool,description="Is large shop?",required=False,default=None),
                       service_shop: discord.Option(bool,description="Is service shop?",required=False,default=None)):
+    """
+    Update specific information about a shop.
 
+    Used to be !mb change shopname/coords/largeshop/serviceshop
+
+    :param ctx:
+    :param channel:
+    :param shop_name:
+    :param coords:
+    :param large_shop:
+    :param service_shop:
+    :return:
+    """
     # MSG INDEX 0 = Main Shop Info
     # FILED 0 = Owners
     # FIELD 1 = Initialized
@@ -2403,16 +2581,16 @@ async def update_shop(ctx, channel: discord.Option(discord.TextChannel,descripti
     # MSG INDEX 3 = Shop check command and where to put message template for sending
 
     # Make sure it's actually in a shop channel.
-    if not await is_shop_channel(channel):
+    if not is_shop_channel(channel):
         await ctx.respond("Invalid Channel",ephemeral=True)
         return
 
 
     await ctx.respond("Updating shop info...", ephemeral=True)
 
-    shop_message_history = await get_shop_channel_history(channel)
+    shop_message_history, history_success = await get_shop_channel_history(channel)
 
-    if shop_message_history is False:
+    if history_success is False:
         logger.log(f"update_shop: Unable to find bot messages in {channel.name} | {channel.id}","[ERROR] ")
         await ctx.respond("Can't find messages", ephemeral=True)
         return
@@ -2478,10 +2656,20 @@ async def update_shop(ctx, channel: discord.Option(discord.TextChannel,descripti
 
         debug(f"Changed Service Shop to {service_shop}.")
 
-# !mb change district
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Moves a shop to a different District.")
 @discord.ext.commands.has_role(variables['shop_admin_id'])
 async def move_shop(ctx, channel: discord.Option(discord.TextChannel,description="Shop's channel"), district_number: discord.Option(int, description="District Number")):
+    """
+    Moves a shop to a different District.
+
+    Used to be !mb change district
+
+    :param ctx:
+    :param channel:
+    :param district_number:
+    :return:
+    """
+
     if not is_shop_channel(channel):
         await ctx.respond("Not a valid Channel.",ephemeral=True)
         return
@@ -2529,23 +2717,24 @@ async def move_shop(ctx, channel: discord.Option(discord.TextChannel,description
     # If none found after loop finishes then respond saying as much
     await ctx.respond("Unable to find District.",ephemeral=True)
 
-# !mb update owner
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Updates the owners of a shop.")
 @discord.ext.commands.has_role(variables['shop_staff_id'])
 async def update_owner(ctx, channel: discord.Option(discord.TextChannel,description="Shop's channel",required=True),
                        owner_number: discord.Option(int,description="Owner Number. (1, 2, 3, 4, 5.. 20",required=True),
                        mc_name: discord.Option(str,description="Minecraft Username. Leave blank to remove owner.",default="",required=False),
                        discord_name: discord.Option(str,description="Discord name OR ID",default="",required=False)):
+    """
+    Updates the owner of a shop.
 
-    # Checks if shop actually exists
-    #if len(database.query(f"SELECT shop_name FROM shops WHERE shop_channel_id = \"{shop.id}\"")) == 0:
-    #    await ctx.respond("Invalid shop.",ephemeral=True)
-    #    return
+    Used to be !mb update owner1/2/3
 
-    # TODO: Combine these queries so we can speed this section up
-    #mc_owners = database.query(f"SELECT mc_owners FROM shops WHERE shop_channel_id = \"{shop.id}\"")[0][0]
-    #discord_owners = database.query(f"SELECT discord_owners FROM shops WHERE shop_channel_id = \"{shop.id}\"")[0][0]
-    #is_service_shop = database.query(f"SELECT service_shop FROM shops WHERE shop_channel_id = \"{shop.id}\"")[0][0]
+    :param ctx:
+    :param channel:
+    :param owner_number:
+    :param mc_name:
+    :param discord_name:
+    :return:
+    """
 
     results = database.query(f"SELECT mc_owners, discord_owners, service_shop FROM shops WHERE shop_channel_id = \"{channel.id}\"")
     if len(results) == 0:
@@ -2598,9 +2787,9 @@ async def update_owner(ctx, channel: discord.Option(discord.TextChannel,descript
 
     await ctx.respond(f"Updating owner #{owner_number + 1} for <#{channel.id}>...", ephemeral=True)
 
-    shop_message_history = await get_shop_channel_history(channel)
+    shop_message_history, history_success = await get_shop_channel_history(channel)
 
-    if shop_message_history is False:
+    if history_success is False:
         await ctx.respond("Can't find messages", ephemeral=True)
         return
 
@@ -2646,26 +2835,23 @@ async def update_owner(ctx, channel: discord.Option(discord.TextChannel,descript
     old_embed = update_shop_check_command_embed(shop_message_history[3].embeds[0], shop_channel_id=channel.id, is_service_shop=bool(int(is_service_shop)))
     await shop_message_history[3].edit(embeds=[old_embed])
 
-# !mb report
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Generates a report that shows shops that have not been checked this week.")
 @discord.ext.commands.has_role(variables['shop_admin_id'])
 async def report(ctx):
-    # TODO: Finish
+    """
+    Generates a report of shops that have not been checked this week.
+
+    Used to be !mb report
+
+    :param ctx:
+    :return:
+    """
 
     if is_shop_channel(ctx.channel):
         await ctx.respond("Please don't use this command in a shop channel...",ephemeral=True)
         return
 
     await ctx.respond("Generating, please wait...")
-
-    # Grab all currently open shops
-    #result = database.query("SELECT shop_id, shop_channel_id, district FROM shops WHERE shop_status = \"Open\" ORDER BY district ASC;")
-
-    # TODO: Combine these ^twoV in one using join and redo following code to match.
-
-    # Grab latest shop checks
-    #result_two = database.query("SELECT shop_id, MAX(date_and_time) FROM shop_checks GROUP BY shop_id ORDER BY date_and_time DESC;")
-
 
     result = database.query(f"SELECT sc.shop_id, sh.district, MAX(sc.date_and_time), sh.shop_channel_id FROM shop_checks sc INNER JOIN shops sh ON sc.shop_id=sh.shop_id WHERE sh.shop_status = \"Open\" GROUP BY sc.shop_id ORDER BY sh.district ASC;")
 
@@ -2730,12 +2916,21 @@ async def report(ctx):
 
     if len(embed_list) > 0:
         await ctx.respond(embeds=embed_list)
+    else:
+        await ctx.respond("Nothing to report! o7")
 
-# !mb search
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Searches through the database to look for a keyword.")
 @discord.ext.commands.has_role(variables['shop_staff_id'])
 async def search(ctx, search_term: discord.Option(str,description="Shop Name, Owner, or a Keyword. Case sensitive.",required=True)):
-    # TODO: Finish
+    """
+    Searches the database for shops/owners that have a keyword.
+
+    Used to be !mb search
+
+    :param ctx:
+    :param search_term:
+    :return:
+    """
 
     if is_shop_channel(ctx.channel):
         await ctx.respond("Please don't use this command in a shop channel...",ephemeral=True)
@@ -2758,7 +2953,6 @@ async def search(ctx, search_term: discord.Option(str,description="Shop Name, Ow
 
 # ========================================================================================[DEV COMMANDS]============================================================================================
 
-# New command to load and create missing shops from SQL database
 @bot.slash_command(guild_ids=[variables['guild_id']],description="DO NOT USE Reads all data from the SQL Database and Imports it.")
 @discord.ext.commands.has_role(variables['shop_admin_id'])
 async def import_from_sql(ctx):
@@ -2766,12 +2960,12 @@ async def import_from_sql(ctx):
     Reads all data from the SQL Database and creates all shops in the database.
     Basically here to transfer from old marketplace bot to this one.
 
+    TODO: Delete after first use!!!
+
     :param ctx:
     :return:
     """
 
-    # TODO: Finish
-    # TODO: Fix NONE owner being listed for some reason
     await ctx.respond("Importing from SQL Database... This **WILL** take a while. (Will respond when done)")
     logger.log("Importing from SQL Database... This will take a while.", "[INFO] ")
 
@@ -2810,6 +3004,8 @@ async def import_from_sql(ctx):
 
         temp_owners.append(s[4])
         temp_owners_discord.append(s[5])
+
+        debug(f"6: {s[6]} | 8: {s[8]}")
 
         # It really is hit or miss at this point
         if f"{s[6]}" != "None":
@@ -2851,219 +3047,41 @@ async def import_from_sql(ctx):
     logger.log("SQL Import & Reformat completed.","[INFO] ")
     await ctx.respond("SQL Import & Reformat completed.\n<@142471642440794112> now delete this command :)")
 
-# @bot.slash_command(guild_ids=[variables['guild_id']],description="DO NOT USE Reformats datetimes in shop checks to new format.")
-# @discord.ext.commands.has_role(variables['shop_admin_id'])
-async def reformat_shop_checks_sql(ctx):
-    """
-    The point of reformatting this is to not have to format the datetime format everytime we want to use it between MySQL and Python.
-    Also, it lets us do date calculations in SQL and not in python.
-
-    Should ONLY BE RAN ONCE.
-
-    :param ctx:
-    :return:
-    """
-
-    await ctx.respond("Reformatting Shop checks SQL... This **WILL** take forever to do.")
-    logger.log("Reformatting shop checks...", tag="[INFO] ")
-    result = database.query("SELECT * FROM shop_checks;")
-    count = 0
-    for sc in result:
-        if sc[3] is None:
-            continue
-        try:
-            new_datetime = datetime.datetime.strptime(sc[3].strip(), "%m-%d-%Y %I:%M %p")
-        except ValueError:
-            continue
-
-        database.query(f"UPDATE shop_checks SET date_and_time = \"{str(new_datetime).split('.')[0]}\" WHERE shop_check_id = {sc[0]};")
-        count += 1
-
-        debug(count)
-
-    logger.log(f"Reformatted {count} shop check entries.", tag="[INFO] ")
-    await ctx.respond("Done.")
-
-# @bot.slash_command(guild_ids=[variables['guild_id']],description="DO NOT USE Reformats all entered SQL data")
-# @discord.ext.commands.has_role(variables['shop_admin_id'])
-async def reformat(ctx):
-    """
-    Changes SQL Database to new formats. Hopefully will allow this bot to be a drop in replacement.
-
-    :param ctx:
-    :return:
-    """
-    # TODO: Remove, we're not reformatting current discord server
-    # TODO: Transform all entries in timestamps to datetime values in the date_and_time column
-
-    await ctx.respond("Reformatting SQL Database... This may take a while.\nDO NOT USE OTHER BOT FUNCTIONS UNTIL THIS IS DONE!")
-    logger.log("Reformatting SQL Database... This may take a while.", "[INFO] ")
-
-    debug("Debug mode is True")
-
-    result = database.query("SELECT * FROM shops WHERE shop_init = 1;")
-    #   0    1                2     3       4            5               6            7               8            9               10         11          12            13               14        15           16            17            18             19              20
-    #[( id#, shop channel id, name, coords, owner1 name, owner1 discord, owner2 name, owner2 discord, owner3 name, owner3 discord, shop init, large shop, service shop, image (varchar), district, district id, scmessage id, scstatmsg id, ocembedmsg id, reclaim msg id, shop status (Open or Closed) )]
-    shop_infos = []
-    for s in result:
-        temp_shop_info = {}
-
-        # Gather all old owner information
-        temp_owners = []
-        temp_owners_discord = []
-
-        temp_owners.append(s[4])
-        temp_owners_discord.append(s[5])
-
-        # Check to make sure owner2 has information
-        if s[6].lower() != "none" and len(s[6]) > 0:
-            temp_owners.append(s[6])
-            temp_owners_discord.append(s[7])
-
-        # Check to make sure owner3 has information
-        if s[8].lower() != "none" and len(s[8]) > 0:
-            temp_owners.append(s[8])
-            temp_owners_discord.append(s[9])
-
-        temp_shop_info["owners_mc_list"] = temp_owners
-        temp_shop_info["owners_discord_list"] = temp_owners_discord
-
-        shop_infos.append(temp_shop_info)
-
-        # Create blank owner strings to upload into the SQL Database later
-        mc_owners_list_str = ""
-        discord_owners_list_str = ""
-
-        # Same blank owner list, but in the format for the actual discord embed
-        embed_owners_list_str = ""
-
-        for i, m in enumerate(temp_owners):
-            if i < len(temp_owners) - 1:
-                mc_owners_list_str += m + "|"
-                discord_owners_list_str += temp_owners_discord[i] + "|"
-
-                embed_owners_list_str += f"{m} (`{temp_owners_discord[i]}`)\n"
-            else:
-                mc_owners_list_str += m
-                discord_owners_list_str += temp_owners_discord[i]
-
-                embed_owners_list_str += f"{m} (`{temp_owners_discord[i]}`)"
-
-        # Upload new owner information into the database
-        database.query(f"UPDATE shops SET mc_owners = \"{mc_owners_list_str}\" WHERE shop_id = {int(s[0])};")
-        database.query(f"UPDATE shops SET discord_owners = \"{discord_owners_list_str}\" WHERE shop_id = {int(s[0])};")
-
-        if debug_mode:
-            debug(f"Reformatted: {s[2]}")
-            continue
-
-        # Overwrite the existing Owners field with the new format
-        shop_channel = await bot.fetch_channel(int(database.query(f"SELECT shop_channel_id FROM shops WHERE shop_id = {s[0]};")[0][0]))
-
-        shop_message_history = []
-        async for msg in shop_channel.history(oldest_first=True):
-            if msg.author.id == bot.user.id:
-                if len(shop_message_history) == 4:
-                    await msg.delete()
-                else:
-                    shop_message_history.append(msg)
-
-        if len(shop_message_history) < 4:
-            logger.log(f"Unable to find all 4 embeds for {s[2]} | <#{s[1]}>","[ERROR] ")
-            continue
-
-        new_embed = shop_message_history[0].embeds[0]
-        new_embed.set_field_at(index=0, name="Owners:", value=embed_owners_list_str, inline=False)
-
-        await shop_message_history[0].edit(embeds=[new_embed])
-
-        # TODO: Implement this fully into here
-        update_shop_check_command_embed(shop_message_history[3].embeds[0])
-
-        debug(f"Reformatted: {s[2]}")
-
-    logger.log("Reformatting shop checks...", tag="[INFO] ")
-    result = database.query("SELECT * FROM shop_checks;")
-    count = 0
-    for sc in result:
-        try:
-            new_datetime = datetime.datetime.strptime(sc[3].strip(), "%m-%d-%Y %I:%M %p")
-        except ValueError:
-            continue
-
-        database.query(f"UPDATE shop_checks SET date_and_time = \"{str(new_datetime).split('.')[0]}\" WHERE shop_check_id = {sc[0]};")
-        count += 1
-
-        debug(count)
-
-    logger.log(f"Reformatted {count} shop check entries.", tag="[INFO] ")
-
-    logger.log("Reformat completed.","[INFO] ")
-
-# @bot.slash_command(guild_ids=[variables['guild_id']],description="test command to delete later")
-async def test(ctx):
-    await ctx.respond('testing',ephemeral=True)
-    res = construct_shop_embeds(shop_embeds_template,
-                                {"shop_image_url":"https://upload.wikimedia.org/wikipedia/en/b/b6/Minecraft_2024_cover_art.png",
-                                 "shop_name":'my shop',
-                                 "shop_coords":'1 1 1',
-                                 "owners_mc_list":['FutureCrafter47'],
-                                 "owners_discord_list":['envyinggolem47'],
-                                 "initialized":True,
-                                 "large_shop":False,
-                                 "service_shop":False,
-                                 "status":"STATUS",
-                                 "next_check":"NEXT CHECK",
-                                 "last_checked_by":142471642440794112,
-                                 "last_checked":'LAST CHECKED'})
-
-    new_list = []
-    for r in res:
-        new_list.append(r.to_dict())
-    saveJsonToFile('test.json',new_list)
-    debug('saved')
-    time.sleep(1)
-    new_list_two = getJsonFromFile('test.json')
-    debug('loaded')
-
-    for i,n in enumerate(new_list_two):
-        new_list_two[i]=discord.Embed().from_dict(n)
-
-    await ctx.channel.send(embeds=new_list_two)
+# TODO: Remove all Dev commands after use
 
 @bot.slash_command(guild_ids=[variables['guild_id']],description="DO NOT USE Deletes ALL Shop channels.")
 @discord.ext.commands.has_role(variables['shop_admin_id'])
 async def delete_all_shops(ctx):
+    """
+    Deletes every shop channel.
+
+    TODO: Disable before Production!!!
+
+    :param ctx:
+    :return:
+    """
+
+
     await ctx.respond("Burning it down")
     guild_channels = await primary_guild.fetch_channels()
 
     for channel in guild_channels:
         if is_shop_channel(channel):
-            await channel.delete()
+            await delete_channel(channel)
 
     await ctx.respond("Done")
+
 # ========================================================================================[DEV COMMANDS]============================================================================================
 
-# New command to create a shop, but without going through the process in a channel.
-#@bot.slash_command(guild_ids=[variables['guild_id']],description="Create a shop but by just using the command.")
-async def cmd_create(ctx,
-                     shop_name: discord.Option(str,description="Shop Name"),
-                     shop_coords: discord.Option(str,description="Shop Coords Format: X X X"),
-                     owners_mc_list: discord.Option(str,description="List of Owners' In Game Usernames. Seperate with |"),
-                     owners_discord_list: discord.Option(str,description="List of Owners' Discord Usernames/IDs. Seperate with |"),
-                     large_shop: discord.Option(bool,description="Is it a large shop?"),
-                     service_shop: discord.Option(bool,description="Is it a service shop?"),
-                     shop_image: discord.Option(discord.Attachment,description="Image update to"),
-                     district_number: discord.Option(int,description="District Number")):
-    # TODO: Finish
-    pass
-
-# New command to map roles to districts
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Map a role to a district number.")
 @discord.ext.commands.has_role(variables['shop_admin_id'])
 async def assign_role_to_district(ctx, role: discord.Option(discord.Role, description="Role to assign."),district_number: discord.Option(int, description="District number to assign to.")):
     """
     Assigns a mapping for district to role ID.
+
+    If a mapping already exists, it will overwrite it.
+
+    This becomes the role the bot @s when notifying a district.
 
     :param ctx:
     :return:
@@ -3071,7 +3089,7 @@ async def assign_role_to_district(ctx, role: discord.Option(discord.Role, descri
 
     district_role_mappings[str(district_number)] = role.id
     saveJsonToFile(district_role_mappings_file,district_role_mappings)
-    await ctx.respond("Role mapped.",ephemeral=True)
+    await ctx.respond(f"{role} mapped to District {district_number}.",ephemeral=True)
     logger.log(f"Assigned Role ID {role.id} to District {district_number}", tag="[INFO] ")
 
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Generates and sends guides in the channel this is ran in.")
@@ -3080,6 +3098,8 @@ async def generate_guides(ctx):
     """
     Generates embeds based on data in guides_template.
     Will then send embeds in the channel this is called from (providing it isn't a shop channel).
+
+    Does NOT delete any previous guides/messages.
 
     :param ctx:
     :return:
@@ -3097,10 +3117,8 @@ async def generate_guides(ctx):
 
         await ctx.channel.send(embeds=[new_embed])
 
+# ======================== And finally, the actual turning on the bot ========================
 
-# Cogs go here (if any)
-
-# Attempts to run the bot
 try:
     bot.run(variables['token'])
 except discord.errors.LoginFailure:
