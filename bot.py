@@ -3,7 +3,7 @@
 #
 # Python Marketplace Discord Bot - Built for Project Nebula
 #
-# Updated: 9/19/2026 - EnvyingGolem47
+# Updated: 9/22/2026 - EnvyingGolem47
 
 import datetime
 import time
@@ -24,6 +24,7 @@ import paramiko
 data_folder = "data/"
 variables_file = f"{data_folder}.variables.json"
 logs_folder = f"{data_folder}logs/"
+images_folder = f"{data_folder}images/"
 
 # Designed to just accept baguette bot's baguette_config.json file
 emoji_to_staff_member_file = f"{data_folder}baguette_config.json"
@@ -668,7 +669,7 @@ def check_directories():
 
     :return:
     """
-    for d in [data_folder,memory_folder,logs_folder]:
+    for d in [data_folder,memory_folder,logs_folder,images_folder]:
         try:
             os.mkdir(d)
 
@@ -710,12 +711,22 @@ def get_variables() -> dict:
         sql_password = SInput("Please enter your SQL Server's Password: ", printQuestion=True)
         sql_port = SInput("Please enter your SQL Server's Port Number: ",IsInt=True, printQuestion=True)
 
-        sftp_hostname = SInput("Please enter your SFTP Server's Hostname: ", printQuestion=True)
-        sftp_username = SInput("Please enter your SFTP Server's Username: ", printQuestion=True)
-        sftp_password = SInput("Please enter your SFTP Server's Password: ", printQuestion=True)
-        sftp_port = SInput("Please enter your SFTP Server's Port Number: ",IsInt=True, printQuestion=True)
-        sftp_image_directory = SInput("Please enter the directory where your images are being stored in the SFTP server: ", printQuestion=True)
-        image_url_prefix = SInput("Please enter the URL Prefix for where images are being hosted.\n(Example: 'test.com/image.png' you would put 'test.com/')\n: ", printQuestion=True)
+        sftp_hostname = SInput("Please enter your SFTP Server's Hostname ( or type DISCORD for Discord Storage ): ", printQuestion=True)
+
+        if sftp_hostname != "DISCORD":
+            sftp_username = SInput("Please enter your SFTP Server's Username: ", printQuestion=True)
+            sftp_password = SInput("Please enter your SFTP Server's Password: ", printQuestion=True)
+            sftp_port = SInput("Please enter your SFTP Server's Port Number: ",IsInt=True, printQuestion=True)
+            sftp_image_directory = SInput("Please enter the directory where your images are being stored in the SFTP server: ", printQuestion=True)
+            image_url_prefix = SInput("Please enter the URL Prefix for where images are being hosted.\n(Example: 'test.com/image.png' you would put 'test.com/')\n: ",printQuestion=True)
+        else:
+            sftp_username = ""
+            sftp_password = ""
+            sftp_port = 0
+            image_url_prefix = ""
+            sftp_image_directory = str(SInput("Please enter the Channel ID where your images are to be stored in Discord: ",IsInt=True ,printQuestion=True))
+
+
 
         variables_data = \
             {
@@ -1051,37 +1062,53 @@ async def store_image(guild,attachment:discord.Attachment):
     :return:
     """
 
-    await attachment.save(attachment.filename)
-    debug("Saving to sftp server")
+    await attachment.save(f"{images_folder}{attachment.filename}")
 
-    raw_file = open(attachment.filename,'rb').read()
+    raw_file = open(f"{images_folder}{attachment.filename}", 'rb').read()
     hash_object = hashlib.sha256(raw_file)
 
     file_extension = attachment.filename.split(".")[-1]
 
     sha256_hash = hash_object.hexdigest()
 
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # Apparently this isn't secure according to the docs, sooooo dont know what to do about that (not sure if it matters)
+    os.rename(f"{images_folder}{attachment.filename}",f"{images_folder}{sha256_hash}.{file_extension}")
 
-    ssh.connect(hostname=variables["sftp_hostname"], username=variables["sftp_username"], password=variables["sftp_password"],
-                port=variables["sftp_port"])
+    if variables["sftp_hostname"] == "DISCORD":
 
-    sftp = ssh.open_sftp()
+        image_channel = await guild.fetch_channel(int(variables["sftp_image_directory"]))
 
-    remote_file_path = f'{variables["sftp_image_directory"]}{sha256_hash}.{file_extension}'
-    sftp.put(attachment.filename, remote_file_path)
+        debug("Saving image to Discord server")
 
-    stored_url = f"{variables['image_url_prefix']}{sha256_hash}.{file_extension}"
+        msg_sent = await image_channel.send(file=discord.File(f"{images_folder}{sha256_hash}.{file_extension}"))
+        stored_url = msg_sent.attachments[0].url
 
-    sftp.close()
-    ssh.close()
+        logger.log(f"Stored new image: '{stored_url}'", "[INFO] ")
+        return stored_url
 
-    debug("Removing image")
-    os.remove(attachment.filename)
+    else:
+        debug("Saving image to sftp server")
 
-    logger.log(f"Stored new image: '{stored_url}' in SFTP server.","[INFO] ")
-    return stored_url
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # Apparently this isn't secure according to the docs, sooooo dont know what to do about that (not sure if it matters)
+
+        ssh.connect(hostname=variables["sftp_hostname"], username=variables["sftp_username"], password=variables["sftp_password"],
+                    port=variables["sftp_port"])
+
+        sftp = ssh.open_sftp()
+
+        remote_file_path = f'{variables["sftp_image_directory"]}{sha256_hash}.{file_extension}'
+        sftp.put(f"{images_folder}{sha256_hash}.{file_extension}", remote_file_path)
+
+        stored_url = f"{variables['image_url_prefix']}{sha256_hash}.{file_extension}"
+
+        sftp.close()
+        ssh.close()
+
+        debug("Removing image")
+        os.remove(f"{images_folder}{sha256_hash}.{file_extension}")
+
+        logger.log(f"Stored new image: '{stored_url}' in SFTP server.","[INFO] ")
+        return stored_url
 
 async def notify_district(district_number:int,msg:str,channel_list) -> bool:
     """
@@ -2855,6 +2882,8 @@ async def report(ctx):
     current_embed = None
     current_district = None
 
+    first_embed_list = True
+
     for shop in result:
         late = False
         missing = False
@@ -2878,6 +2907,7 @@ async def report(ctx):
         if len(embed_list) >= 5:
             await ctx.respond(embeds=embed_list)
             embed_list = []
+            first_embed_list = False
 
         # Get the last check for the current shop
         try:
@@ -2901,11 +2931,11 @@ async def report(ctx):
             else:
                 late_check_string = f"⚠️ Last Check: <t:{int(last_check.timestamp())}>"
 
-            current_embed.add_field(name=f"<#{shop[3]}>",value=late_check_string,inline=False)
+            current_embed.add_field(name=f"{late_check_string}",value=f"<#{shop[3]}>",inline=False)
 
     if len(embed_list) > 0:
         await ctx.respond(embeds=embed_list)
-    else:
+    elif first_embed_list:
         await ctx.respond("Nothing to report! o7")
 
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Searches through the database to look for a keyword.")
