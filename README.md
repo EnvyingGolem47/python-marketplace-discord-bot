@@ -4,7 +4,6 @@
 Built for Project Nebula.
 
 
-
 ## Installation:
 ###### (This assumes you have already setup a [Discord server & bot](https://github.com/EnvyingGolem47/python-marketplace-discord-bot/wiki/Discord-Setup))
 
@@ -22,3 +21,6 @@ Built for Project Nebula.
   - `pip install "chat-exporter==3.1.0"`
 - Extract zip file to desired folder
 - Run bot.py and follow the first startup instructions
+
+
+Thank you to Fenshire for helping me test!!

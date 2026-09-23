@@ -48,7 +48,7 @@ debug_mode = False
 # TODO: Optimize code once finished with all features of it (surely this will happen)
 # TODO: Change all owner embeds to create new field when reaching 1024 character limit in the value section. (up to 20 fields, 6000 character limit must be maintained 0-0)
 # TODO: Update how districts are handled to allow the use of shop counts. And also find an optimized way of counting the shops rather than an sql query or api call.
-# TODO: Remove all DEV Commands, and Stopwatches when done
+# TODO: Add Names to all command variables
 
 # ======================== TEMPLATES AND PROCESSES ========================
 
@@ -2168,12 +2168,11 @@ async def create(ctx):
         logger.log(f"{e}","[ERROR] ")
         await ctx.respond("Error creating ticket...\nPlease contact Admins.", ephemeral=True)
 
-@bot.slash_command(guild_ids=[variables['guild_id']],description="NOT FINISHED - SCARY WIP - Repopulates the shop this command is ran in.")
+@bot.slash_command(guild_ids=[variables['guild_id']],description="Repopulates the shop this command is ran in.")
 @discord.ext.commands.has_role(variables['shop_admin_id'])
 async def pop(ctx):
     """
     Repopulates the shop this command is ran in. Still not 100% sure this is flawless but it works for the most part.
-    # TODO: REALLY Stress test this command
 
     Used to be !mb pop
 
@@ -2181,7 +2180,7 @@ async def pop(ctx):
     :return:
     """
 
-    await ctx.respond("Ok! (Surely this'll work juuust fine)", ephemeral=True)
+    await ctx.respond("Ok!", ephemeral=True)
 
     channel = ctx.channel
     logger.log(f"Repopulating {channel.name}","[INFO] ")
@@ -2219,8 +2218,6 @@ async def pop(ctx):
             "last_checked_by":f"<@{sc[1]}>",
             "last_checked":f"<t:{int(sc[2].timestamp())}:f>"
         }
-
-    # TODO: Make it so that if /pop is ran when the bot has a todo message and other reactions, it should put them back (for when its being warned, or reclaimed)
 
     primary_owner_mc = shop_info["owners_mc_list"][0]
     primary_owner_discord = shop_info["owners_discord_list"][0]
@@ -2972,8 +2969,8 @@ async def search(ctx, search_term: discord.Option(str,description="Shop Name, Ow
 
 # ========================================================================================[DEV COMMANDS]============================================================================================
 
-@bot.slash_command(guild_ids=[variables['guild_id']],description="DO NOT USE Reads all data from the SQL Database and Imports it.")
-@discord.ext.commands.has_role(variables['shop_admin_id'])
+#@bot.slash_command(guild_ids=[variables['guild_id']],description="DO NOT USE Reads all data from the SQL Database and Imports it.")
+#@discord.ext.commands.has_role(variables['shop_admin_id'])
 async def import_from_sql(ctx):
     """
     Reads all data from the SQL Database and creates all shops in the database.
@@ -3066,10 +3063,8 @@ async def import_from_sql(ctx):
     logger.log("SQL Import & Reformat completed.","[INFO] ")
     await ctx.respond("SQL Import & Reformat completed.\n<@142471642440794112> now delete this command :)")
 
-# TODO: Remove all Dev commands after use
-
-@bot.slash_command(guild_ids=[variables['guild_id']],description="DO NOT USE Deletes ALL Shop channels.")
-@discord.ext.commands.has_role(variables['shop_admin_id'])
+#@bot.slash_command(guild_ids=[variables['guild_id']],description="DO NOT USE Deletes ALL Shop channels.")
+#@discord.ext.commands.has_role(variables['shop_admin_id'])
 async def delete_all_shops(ctx):
     """
     Deletes every shop channel.
