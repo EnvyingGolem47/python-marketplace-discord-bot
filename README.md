@@ -1,4 +1,4 @@
-# Python Marketplace Discord Bot, Version: Alpha - 9.22.2026
+# Python Marketplace Discord Bot, Version: Alpha - 9.23.2026
 ###### By: EnvyingGolem47
 
 Built for Project Nebula.
@@ -9,9 +9,10 @@ Built for Project Nebula.
 
 - Download as a zip file
 - Set up mysql server and database
-- Set up a nginx webserver & SFTP server in the same space 
-  - SFTP Server **must** be able to access nginx webserver files
-  - Ideally it should be the ONLY thing it can access *(security and such)*
+- If using SFTP For image Storage:
+  - Set up a nginx webserver & SFTP server in the same space 
+    - SFTP Server **must** be able to access nginx webserver files
+    - Ideally it should be the ONLY thing it can access *(security and such)*
 - Install python 3.12
 - Install dependencies (`requirements.txt` is included if needed)
   - `pip install "superutilities==0.2.6"`
@@ -23,4 +24,4 @@ Built for Project Nebula.
 - Run bot.py and follow the first startup instructions
 
 
-Thank you to Fenshire for helping me test!!
+Special Thanks to Fenshire for helping me test!!

@@ -3,7 +3,7 @@
 #
 # Python Marketplace Discord Bot - Built for Project Nebula
 #
-# Updated: 9/22/2026 - EnvyingGolem47
+# Updated: 9/23/2026 - EnvyingGolem47
 
 import datetime
 import time
@@ -396,6 +396,8 @@ This command takes in no parameters.""",
 Claims a shop for you to check.
 
 **<channel>** : Select the Shop channel you wish to claim. *(This should show up as a list in discord)*
+
+*NOTE: If you are having trouble selecting the right shop, type <#CHANNEL_ID> instead. (replace CHANNEL_ID with the channel's ID)*
 """,
         "updateimage": f"""`/update_image <channel> <image>`
 
@@ -411,13 +413,13 @@ Updates a shop's name, coords, its large shop status, or it's service shop statu
 
 **<channel>** : Select the Shop channel you wish to update. *(This should show up as a list in discord)*
 
-**<shop_name>** (Optional) : The name you want to change the shop's name to.
+**<shop_name> (Optional)** : The name you want to change the shop's name to.
 
-**<coords>** (Optional) : The coords you want to update the shop coords to.
+**<coords> (Optional)** : The coords you want to update the shop coords to.
 
-**<large_shop>** (Optional) : True or False. Whether or not it is a large/tall shop.
+**<large_shop> (Optional)** : True or False. Whether or not it is a large/tall shop.
 
-**<service_shop>** (Optional) : True or False. Whether or not it is a service shop.
+**<service_shop> (Optional)** : True or False. Whether or not it is a service shop.
 """,
         "updateowner": f"""`/update_owner <channel> <owner_number> <mc_name> <discord_name>`
 
@@ -427,7 +429,7 @@ Updates the owner(s) of a shop.
 
 **<owner_number>** : Enter the owner you wish to make changes to. (1, 2, 3..)
 
-NOTE: The next 2 commands are optional, but if you fill out one, you **MUST** fill out the other
+**NOTE:** The next 2 arguments are optional, but if you fill out one, you **MUST** fill out the other
 
 **<mc_name>** 
 
@@ -441,10 +443,10 @@ This command takes in no parameters.
 
 **Usable by Shop Check Admins only.**
 """,
-        "closeshop": f"""`/close_shop <channel>`
+        "closeshop": f"""`/close_shop`
 
 Closes a reclaimed shop, deletes the channel, and saves a transcript. The shop is the one where this command was ran in.
-Will not work if the shop is not marked as Reclaimed.
+**Will not work if the shop is not marked as Reclaimed.**
 
 This command takes in no parameters.
 
@@ -471,8 +473,8 @@ This command takes in no parameters.
 """,
         "generate_guides": f"""`/generate_guides`
 
-Generates and sends the Guide Embeds in the channel this was ran in. Will NOT delete old guide messages.
-DO NOT USE UNLESS ACTUALLY UPDATING THE GUIDE.
+Generates and sends the Guide Embeds in the channel this was ran in. Will **NOT** delete old guide messages.
+**DO NOT USE UNLESS ACTUALLY UPDATING THE GUIDE.**
 
 This command takes in no parameters.
 
@@ -533,7 +535,6 @@ class DatabaseHandler:
             return cursor.fetchall()
         else:
             return []
-
 
     def query_script(self,file_path):
         """
@@ -756,7 +757,7 @@ def get_variables() -> dict:
 
     return variables_data
 
-def load_emojis():
+def load_emojis() -> dict:
     """
     Loads the baguette bot emojis.
 
@@ -764,12 +765,12 @@ def load_emojis():
     """
     try:
         return getJsonFromFile(emoji_to_staff_member_file)["ticket_emoji"]
-    except FileNotFoundError:
+    except FileNotFoundError or KeyError:
         logger.log(f"{emoji_to_staff_member_file} was not found. Creating blank one...", "[ERROR] ")
         saveJsonToFile(emoji_to_staff_member_file,{"ticket_emoji":{}})
         return {"ticket_emoji":{}}
 
-def load_district_role_mappings():
+def load_district_role_mappings() -> dict:
     """
     This loads district_role_mappings into actual memory. It links each district to their respective roles.
 
@@ -807,11 +808,11 @@ message_cache = {}
 shop_id_cache = {}
 
 # ======================== NORMAL FUNCTIONS ========================
-def get_next_check_deadline(checked_date=None):
+def get_next_check_deadline(checked_date=None) -> int:
     """
     Returns the next deadline to check shops.
 
-    :return datetime. int | bool:
+    :return int: Timestamp Integer
     """
 
     # TODO: Change to determine if it's a Friday, Saturday, or Sunday, and then skip to next Sunday. (maybe difference in weekday # + 7?)
@@ -834,7 +835,7 @@ def get_next_check_deadline(checked_date=None):
 
     return int(new_datetime.timestamp())
 
-def get_current_discord_timecode():
+def get_current_discord_timecode() -> int:
     """
     Returns the current time in a discord appropriate timecode.
 
@@ -894,9 +895,14 @@ def construct_shop_embeds(embeds_template_og:list[dict],shop_info:dict) -> [disc
 
                 if len(shop_info['owners_mc_list']) != i + 1:
                     shop_check_command_string += '\n'
+            else:
+                break
 
             if len(shop_info['owners_mc_list']) != i + 1:
                 owners_string += '\n'
+
+        else:
+            break # Might need to change this in the future (hold the crafter). Though I'm not sure we'll have a situation where we would find out why.
 
     shop_info['shop_owners_list'] = owners_string
     shop_info['shop_check_commands'] = shop_check_command_string
@@ -1034,7 +1040,7 @@ def get_shop_id_from_channel_id(channel_id:int):
     Will grab a shops SQL ID from its Channel ID.
 
     :param channel_id:
-    :return:
+    :return: I can't remember if this was an Int or a String...
     """
     channel_id_str = str(channel_id)
 
@@ -1053,7 +1059,7 @@ bot = discord.Bot(intents=discord.Intents.all())
 primary_guild = discord.Guild
 
 # ======================== ASYNC FUNCTIONS ========================
-async def store_image(guild,attachment:discord.Attachment):
+async def store_image(guild,attachment:discord.Attachment) -> str:
     """
     Saves the shop's image and returns the URL which it is stored at.
 
@@ -1165,14 +1171,13 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
         msg_list = []
         shop_info = {}
 
-        async for message in ticket_channel.history(oldest_first=True):
+        async for message in ticket_channel.history(oldest_first=True, limit=1000): # I swear if someone hits this limit, imma be mad
             msg_list.append(message)
 
         # TODO: 2- read messages and compare with shop/sub ticket processes
         # TODO: 3- store all data in respective spaces
         # TODO: 4- Send shop image in image channel
         # TODO: 5- Replace shop_image_url with image url in the image channel
-
 
         for i, msg in enumerate(msg_list):
             found_match = False
@@ -1274,9 +1279,6 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
 
         if shop_already_in_database:
 
-            # TODO: Possibly don't include if we're starting over with a blank slate.
-            # TODO: Actually if we do start over with a blank slate, lets make all new records that have the okay status for the shops
-
             last_check = database.query(f"SELECT shop_status, checked_by_id, date_and_time FROM shop_checks WHERE shop_id = {shop_info['sql_id']} ORDER BY shop_check_id DESC LIMIT 1")[0]
 
             shop_info['status'] = f"{last_check[0]}"
@@ -1293,7 +1295,7 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
     # TODO: 6- Trigger construct_shop_embeds with stored data
     embed_list = construct_shop_embeds(shop_embeds_template,shop_info)
 
-    # TODO: 7- Check if district category exists (if not create it)
+    # TODO: 7- Check if district category exists
     category_id = None
     new_category = None
     district_comments = None
@@ -1318,9 +1320,7 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
             break
 
     # TODO: SANITIZE SHOP NAME HERE
-    shop_info['shop_name'] = SanitizeString(shop_info['shop_name'],bannedCharacters=['$', '&', '{', '}', '\\', '/', '[', ']','(',')','|','<','>'])
-
-    # TODO: DECIDE WHAT, IF ANYTHING, TO DO ABOUT DUPLICATE SHOP NAMES
+    shop_info['shop_name'] = SanitizeString(shop_info['shop_name'],bannedCharacters=['$', '&', '{', '}', '\\', '/', '[', ']','(',')','|','<','>', '%'])
 
     # Create owner strings to upload into the SQL Database
     mc_owners_list_str = ""
@@ -2168,7 +2168,7 @@ async def create(ctx):
         logger.log(f"{e}","[ERROR] ")
         await ctx.respond("Error creating ticket...\nPlease contact Admins.", ephemeral=True)
 
-@bot.slash_command(guild_ids=[variables['guild_id']],description="Repopulates the shop this command is ran in.")
+@bot.slash_command(guild_ids=[variables['guild_id']],description="Repopulates the shop this command was ran in.")
 @discord.ext.commands.has_role(variables['shop_admin_id'])
 async def pop(ctx):
     """
@@ -2421,7 +2421,7 @@ async def claim(ctx,channel: discord.Option(discord.TextChannel, description="")
         new_name = channel.name.replace(f"{channel.name[0]}",emoji_dict[f"{ctx.author.id}"])
     except KeyError:
         logger.log(f"Emoji for {ctx.author.id} was not found.","[ERROR] ")
-        await ctx.respond("Couldn't find your emoji.", ephemeral=True)
+        await ctx.respond("Couldn't find your emoji. :(", ephemeral=True)
         return
 
     await channel.edit(name=new_name)
@@ -2733,7 +2733,7 @@ async def move_shop(ctx, channel: discord.Option(discord.TextChannel,description
 @bot.slash_command(guild_ids=[variables['guild_id']],description="Updates the owners of a shop.")
 @discord.ext.commands.has_role(variables['shop_staff_id'])
 async def update_owner(ctx, channel: discord.Option(discord.TextChannel,description="Shop's channel",required=True),
-                       owner_number: discord.Option(int,description="Owner Number. (1, 2, 3, 4, 5.. 20",required=True),
+                       owner_number: discord.Option(int,description="Owner Number. (1, 2, 3, 4, 5.. 20)",required=True),
                        mc_name: discord.Option(str,description="Minecraft Username. Leave blank to remove owner.",default="",required=False),
                        discord_name: discord.Option(str,description="Discord name OR ID",default="",required=False)):
     """
