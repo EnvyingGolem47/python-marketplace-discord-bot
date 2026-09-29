@@ -364,7 +364,7 @@ help_template = \
 - **/update_owner** : `Updates the owner(s) of a shop.`
 
 ## Admin Commands:
-- **/pop** : `(STILL WIP) Repopulates the shop channel this command is ran in.`
+- **/pop** : `Repopulates the shop channel this command is ran in.`
 
 - **/close_shop** : `Closes a reclaimed shop, deletes the channel, and saves a transcript.`
 
