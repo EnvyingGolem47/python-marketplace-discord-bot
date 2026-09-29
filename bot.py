@@ -1431,11 +1431,7 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
         except AttributeError:
             logger.log(f"Comments channel for District {shop_info['district_number']} was not found.", tag="[ERROR] ")
 
-    # Attempt to update district shop count. Since this is new I'm putting try&except here temporarily (trust) to help prevent anything major breaking.
-    try:
-        await update_district_shop_count(new_category)
-    except Exception as e:
-        logger.log(f"Couldn't update {new_category} shop count.\n{e}","[ERROR] ")
+    await update_district_shop_count(new_category)
 
     # TODO: 13- Return True
     debug(f'{shop_info}')
