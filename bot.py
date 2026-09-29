@@ -3,7 +3,7 @@
 #
 # Python Marketplace Discord Bot - Built for Project Nebula
 #
-# Updated: 9/23/2026 - EnvyingGolem47
+# Updated: 9/28/2026 - EnvyingGolem47
 
 import datetime
 import time
@@ -38,7 +38,8 @@ district_role_mappings_file = f"{memory_folder}district_role_mappings.json"
 logger = Logger(logs_folder)
 
 forbidden_name = re.compile(r"🗒-district-[0-9]+-comments", re.IGNORECASE)
-district_regex = re.compile(r"District [0-9]+")
+district_regex = re.compile(r"District [0-9]+: [0-9]+ Shops?")
+old_district_regex = re.compile(r"District [0-9]+")
 ticket_regex = re.compile(r"ticket-[0-9]+-\S*", re.IGNORECASE)
 
 # Set to true if you want your console to be unreadable (Or if you are genuinely working on the bot)
@@ -374,6 +375,8 @@ help_template = \
 - **/generate_guides** : `Sends embeds of guides where you run it. *Don't use unless you are actually updating the guides*`
 
 - **/assign_role_to_district** : `Maps a Role to a District Number. Doing this will make that role be @'ed when a new shop is made.`
+
+- **/force_shop_count_update** : `Forces all Districts to update their shop counts.`
 """
         }
     ]
@@ -471,7 +474,7 @@ This command takes in no parameters.
 
 **Usable by Shop Check Admins only.**
 """,
-        "generate_guides": f"""`/generate_guides`
+        "generateguides": f"""`/generate_guides`
 
 Generates and sends the Guide Embeds in the channel this was ran in. Will **NOT** delete old guide messages.
 **DO NOT USE UNLESS ACTUALLY UPDATING THE GUIDE.**
@@ -480,7 +483,7 @@ This command takes in no parameters.
 
 **Usable by Shop Check Admins only.**
 """,
-        "assign_role_to_district": f"""`/assign_role_to_district`
+        "assignroletodistrict": f"""`/assign_role_to_district <role> <district_number>`
 
 Maps a role (Such as @District 1) to a District number. This is what the bot checks when notifying a District of a new shop.
 
@@ -489,9 +492,18 @@ Maps a role (Such as @District 1) to a District number. This is what the bot che
 **<district_number>** : The District Number you want to assign the Discord Role to
 
 **Usable by Shop Check Admins only.**
+""",
+        "forceshopcountupdate": f"""`/force_shop_count_update`
+
+Forces all shops the update their shop counts.
+
+This command takes in no parameters.
+
+**Usable by Shop Check Admins only.**
 """
     }
 
+# ======================== CLASSES ========================
 class DatabaseHandler:
     def __init__(self,url:str,database_name:str,username:str,password:str,port:int):
         """
@@ -853,9 +865,16 @@ def get_district_number(category_name:str) -> int:
     """
     if district_regex.fullmatch(category_name):
         try:
-            return int(category_name.replace("District ","").strip())
+            return int(category_name.split(": ")[0].replace("District ","").strip())
         except TypeError or AttributeError:
             return None
+
+    elif old_district_regex.fullmatch(category_name):
+        try:
+            return int(category_name.replace("District ", "").strip())
+        except TypeError or AttributeError:
+            return None
+
     else:
         return None
 
@@ -1030,7 +1049,7 @@ def is_shop_channel(channel) -> bool:
         return False
 
     cat_channel = bot.get_channel(channel.category_id)
-    if not district_regex.match(cat_channel.name) and channel.category_id not in variables["graveyard_category_id_list"]:
+    if not district_regex.match(cat_channel.name) and not old_district_regex.match(cat_channel.name) and channel.category_id not in variables["graveyard_category_id_list"]:
         return False
 
     return True
@@ -1146,6 +1165,33 @@ async def notify_district(district_number:int,msg:str,channel_list) -> bool:
         logger.log(f"Comments channel for District {district_number} was not found.", tag="[ERROR] ")
 
     return True
+
+async def get_from_channel_cache(channel_id:int):
+    """
+    Gets a channel from cache OR will fetch and cache an unseen one.
+
+    This is to try and help with API times and prevent rate limiting.
+
+    :param channel_id:
+    :return:
+    """
+    global channel_cache
+    str_channel_id = str(channel_id)
+
+    if str_channel_id not in channel_cache:
+        channel_cache[str_channel_id] = await primary_guild.fetch_channel(channel_id)
+        debug(f"Cached new channel {str_channel_id}")
+
+    return channel_cache[str_channel_id]
+
+async def get_from_message_cache(msg_id:int,channel):
+    global message_cache
+    msg_id_str = str(msg_id)
+
+    if msg_id_str not in message_cache:
+        message_cache[msg_id_str] = await channel.fetch_message(msg_id)
+
+    return message_cache[msg_id_str]
 
 async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_info=None,shop_already_in_database:bool=False) -> bool | None:
     """
@@ -1385,37 +1431,15 @@ async def create_shop_channel(ticket_channel:discord.TextChannel,premade_shop_in
         except AttributeError:
             logger.log(f"Comments channel for District {shop_info['district_number']} was not found.", tag="[ERROR] ")
 
+    # Attempt to update district shop count. Since this is new I'm putting try&except here temporarily (trust) to help prevent anything major breaking.
+    try:
+        await update_district_shop_count(new_category)
+    except Exception as e:
+        logger.log(f"Couldn't update {new_category} shop count.\n{e}","[ERROR] ")
 
     # TODO: 13- Return True
     debug(f'{shop_info}')
     return True
-
-async def get_from_channel_cache(channel_id:int):
-    """
-    Gets a channel from cache OR will fetch and cache an unseen one.
-
-    This is to try and help with API times and prevent rate limiting.
-
-    :param channel_id:
-    :return:
-    """
-    global channel_cache
-    str_channel_id = str(channel_id)
-
-    if str_channel_id not in channel_cache:
-        channel_cache[str_channel_id] = await primary_guild.fetch_channel(channel_id)
-        debug(f"Cached new channel {str_channel_id}")
-
-    return channel_cache[str_channel_id]
-
-async def get_from_message_cache(msg_id:int,channel):
-    global message_cache
-    msg_id_str = str(msg_id)
-
-    if msg_id_str not in message_cache:
-        message_cache[msg_id_str] = await channel.fetch_message(msg_id)
-
-    return message_cache[msg_id_str]
 
 async def delete_channel(channel,reason="Shop closed."):
     """
@@ -1457,6 +1481,32 @@ async def get_shop_channel_history(shop_channel):
 
     return shop_message_history, True
 
+async def update_district_shop_count(category_channel:discord.CategoryChannel):
+    """
+    Updates the shop count for the desired District category.
+    Also converts old_district_regex districts to new district_regex names.
+
+    :param category_channel:
+    :return:
+    """
+
+    debug(f"{old_district_regex.fullmatch(category_channel.name)} | {district_regex.fullmatch(category_channel.name)}")
+
+    district_number = get_district_number(category_channel.name)
+
+    if old_district_regex.fullmatch(category_channel.name):
+        plural = ""
+        shop_count = database.query(f"SELECT COUNT(sh.shop_id) FROM shops sh WHERE sh.district = {district_number} AND sh.shop_status = 'Open' AND (SELECT sc.shop_status FROM shop_checks sc WHERE sc.shop_id = sh.shop_id ORDER BY sc.shop_check_id DESC LIMIT 1) != '❌ Reclaim'")[0][0]
+        if shop_count != 1:
+            plural = "s"
+        await category_channel.edit(name=f"{category_channel.name}: {shop_count} Shop{plural}",reason="Convert to new category naming")
+
+    elif district_regex.fullmatch(category_channel.name):
+        plural = ""
+        shop_count = database.query(f"SELECT COUNT(sh.shop_id) FROM shops sh WHERE sh.district = {district_number} AND sh.shop_status = 'Open' AND (SELECT sc.shop_status FROM shop_checks sc WHERE sc.shop_id = sh.shop_id ORDER BY sc.shop_check_id DESC LIMIT 1) != '❌ Reclaim'")[0][0]
+        if shop_count != 1:
+            plural = "s"
+        await category_channel.edit(name=f"{category_channel.name.split(": ")[0]}: {shop_count} Shop{plural}",reason="Update shop count")
 
 # ======================== DISCORD EVENT ASYNC FUNCTIONS ========================
 
@@ -1886,7 +1936,7 @@ async def on_raw_reaction_add(reaction_data):
 
     # SHOP CHECK PROCESS
     # If reaction was in a shop category
-    elif district_regex.fullmatch(channel_category.name) and msg.author == bot.user and reaction_user != bot.user and len(msg.embeds) > 0:
+    elif (district_regex.fullmatch(channel_category.name) or old_district_regex.fullmatch(channel_category.name)) and msg.author == bot.user and reaction_user != bot.user and len(msg.embeds) > 0:
 
         shop_message_history, history_success = await get_shop_channel_history(channel)
 
@@ -2134,6 +2184,36 @@ async def on_raw_reaction_add(reaction_data):
                 await msg.remove_reaction(react_emoji,reaction_user)
         except discord.NotFound:
             pass
+
+@bot.event
+async def on_guild_channel_update(before_data,after_data):
+    """
+    Triggers when a Channel is updated. Handles updating shop counts.
+
+    :param before_data:
+    :param after_data:
+    :return:
+    """
+    debug("guild_channel_update")
+
+    if type(before_data) == discord.TextChannel:
+
+        if is_shop_channel(before_data):
+
+            debug("before_data")
+
+            category = await get_from_channel_cache(before_data.category_id)
+
+            await update_district_shop_count(category)
+
+
+        if is_shop_channel(after_data):
+
+            debug("after_data")
+
+            category = await get_from_channel_cache(after_data.category_id)
+
+            await update_district_shop_count(category)
 
 # ======================== DISCORD COMMANDS ========================
 
@@ -2488,6 +2568,11 @@ async def close_shop(ctx):
         await transcript_channel.send(file=transcript_file)
 
         database.query(f"UPDATE shops SET shop_status = \"Closed\" WHERE shop_channel_id = \"{channel.id}\";")
+
+        category = await get_from_channel_cache(channel.category_id)
+        await update_district_shop_count(category)
+
+        logger.log(f"Closed Shop: {ctx.channel.name}", "[INFO] ")
 
         await delete_channel(channel)
 
@@ -3130,6 +3215,26 @@ async def generate_guides(ctx):
         new_embed = discord.Embed().from_dict(e)
 
         await ctx.channel.send(embeds=[new_embed])
+
+@bot.slash_command(guild_ids=[variables['guild_id']],description="Forces all District categories to update their shop counts.")
+@discord.ext.commands.has_role(variables['shop_admin_id'])
+async def force_shop_count_update(ctx):
+
+    await ctx.respond("Updating all shop counts...")
+    logger.log(f"Updating all shop counts...","[INFO] ")
+
+    guild_categories = []
+    guild_channels = await primary_guild.fetch_channels()
+
+    for channel in guild_channels:
+        if type(channel) == discord.CategoryChannel:
+            guild_categories.append(channel)
+
+    for category in guild_categories:
+        await update_district_shop_count(category)
+
+    await ctx.respond("Done!")
+    logger.log(f"Done updating all shop counts.", "[INFO] ")
 
 # ======================== And finally, the actual turning on the bot ========================
 
